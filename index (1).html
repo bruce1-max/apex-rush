@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Apex Rush</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@500;600;700&display=swap">
+<style>
+/* Landscape arcade racer. Full-bleed 3D view, carbon-black glass HUD with signal-red accents, italic speed slabs. */
+:root {
+  --bg: #07080b; --glass: rgba(10, 12, 17, 0.62); --edge: rgba(255, 255, 255, 0.16); --ink: #f4f5f7; --muted: #9aa3b2;
+  --red: #ff3b2f; --red-hi: #ff6a5c; --gold: #ffc531; --cyan: #3fd0ff; --green: #4be38a;
+  --display: 'Bebas Neue', Impact, sans-serif; --body: 'Rajdhani', system-ui, sans-serif; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-weight: 600;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 6px;
+  overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+#app { height: 100%; }
+#stage { position: relative; height: 100%; border-radius: 14px; overflow: hidden; background: #6fa8dc; border: 1px solid #1b2029; }
+#gl, #dash { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#dash { pointer-events: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.hud { position: absolute; z-index: 5; pointer-events: none; }
+.slab { background: var(--glass); border: 1px solid var(--edge); border-radius: 8px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#pos { left: 14px; top: 12px; display: flex; gap: 8px; align-items: stretch; }
+#posBox { padding: 2px 14px 0 12px; font-family: var(--display); font-size: 44px; line-height: 1; color: var(--ink); transform: skewX(-9deg); border-left: 4px solid var(--red); }
+#posBox small { font-size: 20px; color: var(--muted); }
+#lapBox { padding: 5px 12px; transform: skewX(-9deg); font-size: 15px; line-height: 1.25; letter-spacing: 0.05em; color: var(--muted); }
+#lapBox b { color: var(--ink); font-size: 20px; letter-spacing: 0.02em; }
+#tools { right: 12px; top: 12px; display: flex; gap: 8px; pointer-events: auto; }
+.ib { width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center; font-size: 12px; letter-spacing: 0.05em; padding: 0; }
+.ib svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#speed { left: 50%; bottom: 14px; text-align: right; transform: translateX(-50%) skewX(-9deg); padding: 4px 16px 4px 14px; min-width: 150px; }
+#spd { font-family: var(--display); font-size: 62px; line-height: 0.9; }
+#spd small { font-size: 18px; color: var(--muted); margin-left: 4px; letter-spacing: 0.06em; }
+#gearRow { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 4px; }
+#gear { font-family: var(--display); font-size: 28px; color: var(--gold); line-height: 1; }
+#rev { width: 96px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+#revFill { height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--gold) 70%, var(--red)); }
+#timeBox { left: 50%; top: 12px; transform: translateX(-50%) skewX(-9deg); padding: 4px 18px; text-align: center; font-family: var(--display); font-size: 30px; letter-spacing: 0.04em; line-height: 1.1; }
+#timeBox small { display: block; font-family: var(--body); font-size: 12px; color: var(--muted); letter-spacing: 0.1em; }
+#touch { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+.pad { position: absolute; bottom: 16px; width: 74px; height: 74px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.34); display: grid; place-items: center; pointer-events: auto; touch-action: none; font-family: var(--display); font-size: 17px; letter-spacing: 0.06em; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.pad svg { width: 34px; height: 34px; fill: #fff; opacity: 0.9; }
+.pad.on { background: rgba(255, 59, 47, 0.5); border-color: var(--red-hi); }
+#bL { left: 18px; } #bR { left: 108px; }
+#bGas { right: 18px; width: 96px; height: 96px; bottom: 20px; font-size: 22px; }
+#bBrk { right: 130px; bottom: 16px; }
+#bGas { background: rgba(75, 227, 138, 0.18); border-color: rgba(75, 227, 138, 0.7); }
+#bGas.on { background: rgba(75, 227, 138, 0.55); }
+#count { position: absolute; z-index: 7; left: 0; right: 0; top: 18%; text-align: center; font-family: var(--display); font-size: 132px; line-height: 1; color: #fff; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.55); pointer-events: none; opacity: 0; }
+#count.pop { animation: pop 0.9s ease-out; }
+@keyframes pop { 0% { opacity: 0; transform: scale(1.7); } 18% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(0.92); } }
+#toast { position: absolute; z-index: 7; left: 50%; top: 40%; transform: translateX(-50%); font-family: var(--display); font-size: 34px; letter-spacing: 0.06em; color: var(--gold); text-shadow: 0 3px 14px #000; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+#mirror { position: absolute; z-index: 4; border-radius: 10px; border: 4px solid #0a0b0e; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18), 0 6px 18px rgba(0, 0, 0, 0.5); pointer-events: none; display: none; }
+.screen { position: absolute; inset: 0; z-index: 10; display: none; }
+.screen.show { display: block; }
+#title { background: linear-gradient(90deg, rgba(5, 6, 9, 0.82) 0%, rgba(5, 6, 9, 0.35) 46%, rgba(5, 6, 9, 0) 70%); }
+#title .bar { position: absolute; left: 0; right: 0; height: 9%; background: #000; }
+#title .bar.t { top: 0; } #title .bar.b { bottom: 0; }
+#titleIn { position: absolute; left: clamp(20px, 5vw, 56px); top: 50%; transform: translateY(-50%); max-width: 46%; }
+#tag { font-size: 13px; letter-spacing: 0.32em; color: var(--red-hi); }
+#logo { font-family: var(--display); font-size: clamp(54px, 15vh, 104px); line-height: 0.88; margin: 4px 0 6px; font-style: italic; transform: skewX(-8deg); transform-origin: left; text-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+#logo span { color: var(--red); }
+#sub { color: #d5d9e1; font-size: clamp(13px, 3.6vh, 17px); max-width: 300px; line-height: 1.25; margin-bottom: 12px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; padding: 9px 24px; font-family: var(--display); font-size: clamp(20px, 5.6vh, 28px); letter-spacing: 0.08em; transform: skewX(-9deg); min-width: 170px; }
+.btn.main { background: var(--red); color: #fff; box-shadow: 0 6px 22px rgba(255, 59, 47, 0.45); }
+.btn.alt { background: rgba(255, 255, 255, 0.1); border: 1px solid var(--edge); color: var(--ink); }
+.btn:active { filter: brightness(1.15); }
+.btnRow { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+#colors { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 13px; letter-spacing: 0.14em; color: var(--muted); }
+.sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.5); padding: 0; }
+.sw.sel { border-color: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.28); transform: scale(1.12); }
+#carName { margin-left: 6px; color: var(--ink); font-size: 15px; letter-spacing: 0.08em; }
+#hint { position: absolute; right: 16px; bottom: 12%; font-size: 13px; color: #cfd5de; text-align: right; letter-spacing: 0.04em; }
+#how, #pause, #results { background: rgba(5, 6, 9, 0.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.card { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, 92%); max-height: 94%; overflow: auto; padding: 18px 22px; text-align: center; }
+.card h2 { font-family: var(--display); font-size: 46px; margin: 0 0 4px; font-weight: 400; letter-spacing: 0.04em; }
+.card p { margin: 4px 0; color: #cfd5de; font-size: 16px; line-height: 1.3; }
+.card .btnRow { justify-content: center; margin-top: 14px; }
+#resTable { margin: 10px auto 0; border-collapse: collapse; font-size: 18px; min-width: 62%; }
+#resTable td { padding: 3px 12px; text-align: left; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+#resTable tr.me td { color: var(--gold); }
+#resTable td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+#rotate { position: absolute; inset: 0; z-index: 30; background: var(--bg); display: none; place-items: center; text-align: center; padding: 24px; font-family: var(--display); font-size: 34px; letter-spacing: 0.05em; }
+@media (orientation: portrait) { #rotate { display: grid; } }
+@media (max-height: 380px) {
+  #posBox { font-size: 34px; } #spd { font-size: 46px; } .pad { width: 62px; height: 62px; } #bR { left: 92px; } #bGas { width: 82px; height: 82px; } #bBrk { right: 116px; } #timeBox { font-size: 24px; }
+}
+</style>
+<div id="app"><div id="stage">
+  <canvas id="gl"></canvas>
+  <div id="mirror"></div>
+  <canvas id="dash"></canvas>
+  <div class="hud" id="pos"><div class="slab" id="posBox">1<small>/6</small></div><div class="slab" id="lapBox">LAP <b id="lapN">1/3</b><br>BEST <b id="bestT">--</b></div></div>
+  <div class="hud slab" id="timeBox"><small>RACE TIME</small><span id="raceT">0:00.0</span></div>
+  <div class="hud" id="tools">
+    <button class="slab ib" id="btnView" aria-label="Change camera"><svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+    <button class="slab ib" id="btnSnd" aria-label="Sound"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="sndWave" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></button>
+    <button class="slab ib" id="btnPause" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+  </div>
+  <div class="hud slab" id="speed"><div id="spd">0<small>KM/H</small></div><div id="gearRow"><div id="rev"><div id="revFill"></div></div><div id="gear">N</div></div></div>
+  <div id="touch">
+    <button class="pad" id="bL" aria-label="Steer left"><svg viewBox="0 0 24 24"><path d="M15 4 6 12l9 8z"/></svg></button>
+    <button class="pad" id="bR" aria-label="Steer right"><svg viewBox="0 0 24 24"><path d="M9 4l9 8-9 8z"/></svg></button>
+    <button class="pad" id="bBrk" aria-label="Brake">BRAKE</button>
+    <button class="pad" id="bGas" aria-label="Accelerate">GAS</button>
+  </div>
+  <div id="count">3</div><div id="toast"></div>
+
+  <div class="screen show" id="title">
+    <div class="bar t"></div><div class="bar b"></div>
+    <div id="titleIn">
+      <div id="tag">GRAND PRIX</div>
+      <div id="logo">APEX<br><span>RUSH</span></div>
+      <div id="sub">Two laps. Five rivals. One chance to take the flag.</div>
+      <div class="btnRow"><button class="btn main" id="btnRace">NEW RACE</button><button class="btn alt" id="btnHow">HOW TO PLAY</button></div>
+      <div id="colors"><span>PAINT</span><button class="sw" data-c="0" style="background:#1d4fd8" aria-label="Blue"></button><button class="sw" data-c="1" style="background:#c9ced6" aria-label="Silver"></button><button class="sw" data-c="2" style="background:#d8151f" aria-label="Red"></button><button class="sw" data-c="3" style="background:#f2b705" aria-label="Yellow"></button><span id="carName">Cobalt</span></div>
+    </div>
+    <div id="hint">Made with AI for the Loadout AI Game Competition</div>
+  </div>
+  <div class="screen" id="how"><div class="card slab">
+    <h2>HOW TO PLAY</h2>
+    <p><b>Steer</b> with the left and right arrows. <b>Gas</b> is the green button or the up arrow. <b>Brake</b> is the down arrow. Brake before sharp corners and the back end will slide.</p>
+    <p>Tap the camera button to switch between chase, hood and cockpit views. Finish 3 laps in front of the other five cars.</p>
+    <p style="color:#9aa3b2;font-size:14px">Keyboard: arrow keys or WASD. C changes camera, P pauses.</p>
+    <div class="btnRow"><button class="btn main" id="howOk">GOT IT</button></div>
+  </div></div>
+  <div class="screen" id="pause"><div class="card slab"><h2>PAUSED</h2><div class="btnRow"><button class="btn main" id="pResume">RESUME</button><button class="btn alt" id="pQuit">QUIT TO MENU</button></div></div></div>
+  <div class="screen" id="results"><div class="card slab">
+    <h2 id="resTitle">FINISHED</h2><p id="resSub"></p>
+    <table id="resTable"></table>
+    <div class="btnRow"><button class="btn main" id="rAgain">RACE AGAIN</button><button class="btn alt" id="rMenu">MENU</button></div>
+  </div></div>
+  <div id="rotate">TURN YOUR PHONE SIDEWAYS TO RACE</div>
+</div></div>
+<script>
+(function () {
+  'use strict';
+  function $(i) { return document.getElementById(i); }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function angDiff(a, b) { var d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
+  function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function hex(h) { var n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
+
+  /* ---------------------------------------------------------------- matrices (column-major) */
+  var _t = new Float32Array(16);
+  function mul(o, a, b) {
+    for (var c = 0; c < 4; c++) for (var r = 0; r < 4; r++) { var s = 0; for (var k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; _t[c * 4 + r] = s; }
+    for (var i = 0; i < 16; i++) o[i] = _t[i];
+    return o;
+  }
+  function persp(o, fov, asp, n, f) {
+    var t = 1 / Math.tan(fov / 2); o.fill(0);
+    o[0] = t / asp; o[5] = t; o[10] = (f + n) / (n - f); o[11] = -1; o[14] = 2 * f * n / (n - f);
+    return o;
+  }
+  function viewM(o, px, py, pz, yaw, pitch, roll) {
+    var cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    var f = [cy * cp, sp, sy * cp], up0 = [0, 1, 0];
+    var r = [f[1] * up0[2] - f[2] * up0[1], f[2] * up0[0] - f[0] * up0[2], f[0] * up0[1] - f[1] * up0[0]];
+    var rl = Math.hypot(r[0], r[1], r[2]); r = [r[0] / rl, r[1] / rl, r[2] / rl];
+    var u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    if (roll) { var cr = Math.cos(roll), sr = Math.sin(roll); var r2 = [r[0] * cr + u[0] * sr, r[1] * cr + u[1] * sr, r[2] * cr + u[2] * sr], u2 = [u[0] * cr - r[0] * sr, u[1] * cr - r[1] * sr, u[2] * cr - r[2] * sr]; r = r2; u = u2; }
+    o[0] = r[0]; o[4] = r[1]; o[8] = r[2]; o[12] = -(r[0] * px + r[1] * py + r[2] * pz);
+    o[1] = u[0]; o[5] = u[1]; o[9] = u[2]; o[13] = -(u[0] * px + u[1] * py + u[2] * pz);
+    o[2] = -f[0]; o[6] = -f[1]; o[10] = -f[2]; o[14] = f[0] * px + f[1] * py + f[2] * pz;
+    o[3] = 0; o[7] = 0; o[11] = 0; o[15] = 1;
+    return o;
+  }
+  function trs(o, x, y, z, yaw, sx, sy, sz) {
+    var c = Math.cos(yaw), s = Math.sin(yaw);
+    o[0] = c * sx; o[1] = 0; o[2] = -s * sx; o[3] = 0; o[4] = 0; o[5] = sy; o[6] = 0; o[7] = 0;
+    o[8] = s * sz; o[9] = 0; o[10] = c * sz; o[11] = 0; o[12] = x; o[13] = y; o[14] = z; o[15] = 1;
+    return o;
+  }
+
+  /* ---------------------------------------------------------------- WebGL */
+  var glc = $('gl'), gl = glc.getContext('webgl', { antialias: true, alpha: false });
+  var GLOK = !!gl;
+  var U = {}, prog = null, white = null, VW = 800, VH = 360, DPR = 1;
+  if (GLOK) {
+    gl.getExtension('OES_element_index_uint');
+    var VS = 'attribute vec3 aPos;attribute vec3 aNor;attribute vec3 aCol;attribute vec2 aUv;uniform mat4 uVP;uniform mat4 uModel;uniform vec3 uCam;varying vec3 vN;varying vec3 vC;varying vec2 vUv;varying float vD;varying vec3 vV;' +
+      'void main(){vec4 w=uModel*vec4(aPos,1.0);vV=uCam-w.xyz;gl_Position=uVP*w;vN=(uModel*vec4(aNor,0.0)).xyz;vC=aCol;vUv=aUv;vD=length(w.xyz-uCam);}';
+    var FS = 'precision mediump float;uniform sampler2D uTex;uniform float uUseTex;uniform vec3 uTint;uniform vec3 uSun;uniform vec3 uFog;uniform float uFogNear;uniform float uFogFar;uniform float uUnlit;uniform float uAlpha;uniform float uTwo;uniform float uSpec;varying vec3 vV;' +
+      'varying vec3 vN;varying vec3 vC;varying vec2 vUv;varying float vD;' +
+      'void main(){vec4 t=mix(vec4(1.0),texture2D(uTex,vUv),uUseTex);float a=t.a*uAlpha;if(a<0.04)discard;vec3 base=vC*uTint*t.rgb;vec3 n=normalize(vN);float d=dot(n,uSun);d=mix(max(d,0.0),abs(d),uTwo);' +
+      'vec3 lit=base*(0.6+0.48*d);vec3 V=normalize(vV);vec3 Hh=normalize(uSun+V);float sp=pow(max(dot(n,Hh),0.0),48.0)*uSpec;float fr=pow(1.0-max(dot(n,V),0.0),3.0)*uSpec*0.5;lit+=vec3(sp+fr*0.35);vec3 col=mix(lit,base,uUnlit);float f=clamp((vD-uFogNear)/(uFogFar-uFogNear),0.0,1.0);col=mix(col,uFog,f);gl_FragColor=vec4(col,a);}';
+    var mk = function (type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    prog = gl.createProgram();
+    gl.attachShader(prog, mk(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, FS));
+    gl.bindAttribLocation(prog, 0, 'aPos'); gl.bindAttribLocation(prog, 1, 'aNor'); gl.bindAttribLocation(prog, 2, 'aCol'); gl.bindAttribLocation(prog, 3, 'aUv');
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    ['uVP', 'uModel', 'uCam', 'uTex', 'uUseTex', 'uTint', 'uSun', 'uFog', 'uFogNear', 'uFogFar', 'uUnlit', 'uAlpha', 'uTwo', 'uSpec'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+    for (var ai = 0; ai < 4; ai++) gl.enableVertexAttribArray(ai);
+    gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(U.uTex, 0);
+    white = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, white);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
+  }
+  var SUN = (function () { var v = [0.35, 0.82, 0.45], l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; })();
+  var FOGC = hex('#bcd8ee');
+
+  /* ---------------------------------------------------------------- geometry builder */
+  function Geo() { this.v = []; this.i = []; this.n = 0; }
+  Geo.prototype.vert = function (x, y, z, nx, ny, nz, c, u, v) { this.v.push(x, y, z, nx, ny, nz, c[0], c[1], c[2], u, v); return this.n++; };
+  Geo.prototype.quad = function (a, b, c, d) { this.i.push(a, b, c, a, c, d); };
+  Geo.prototype.tri = function (a, b, c) { this.i.push(a, b, c); };
+  Geo.prototype.build = function (tex) {
+    if (!GLOK) return { count: 0 };
+    var vb = gl.createBuffer(), ib = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.v), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(this.i), gl.STATIC_DRAW);
+    return { vb: vb, ib: ib, count: this.i.length, tex: tex || null };
+  };
+  // flat strip along (ax,az)->(bx,bz), centred, width w, at height y. u runs along (per uvA metres), v across.
+  function addStrip(g, ax, az, bx, bz, w, y, c, uvA, across) {
+    var dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1, nx = -dz / L * w / 2, nz = dx / L * w / 2, u1 = L / uvA;
+    var v1 = across || 1;
+    var a = g.vert(ax - nx, y, az - nz, 0, 1, 0, c, 0, 0), b = g.vert(bx - nx, y, bz - nz, 0, 1, 0, c, u1, 0), cc = g.vert(bx + nx, y, bz + nz, 0, 1, 0, c, u1, v1), d = g.vert(ax + nx, y, az + nz, 0, 1, 0, c, 0, v1);
+    g.quad(a, d, cc, b);
+  }
+  function addDisc(g, cx, cz, r, y, c, segs, uvm, r0) {
+    segs = segs || 20; uvm = uvm || 8;
+    var ctr = r0 ? -1 : g.vert(cx, y, cz, 0, 1, 0, c, 0.5, 0.5), prev = -1, first = -1, prevIn = -1, firstIn = -1;
+    for (var i = 0; i <= segs; i++) {
+      var a = i / segs * 6.2832, ca = Math.cos(a), sa = Math.sin(a);
+      var o = g.vert(cx + ca * r, y, cz + sa * r, 0, 1, 0, c, (ca * r) / uvm, (sa * r) / uvm);
+      if (r0) { var inn = g.vert(cx + ca * r0, y, cz + sa * r0, 0, 1, 0, c, (ca * r0) / uvm, (sa * r0) / uvm); if (prev >= 0) g.quad(prevIn, inn, o, prev); prevIn = inn; }
+      else if (prev >= 0) g.tri(ctr, o, prev);
+      prev = o;
+    }
+  }
+  // axis aligned box, base at y0, all six faces. uvm = metres per texture tile.
+  function addBox(g, cx, y0, cz, sx, sy, sz, c, uvm, noBottom) {
+    uvm = uvm || 4; var x0 = cx - sx / 2, x1 = cx + sx / 2, z0 = cz - sz / 2, z1 = cz + sz / 2, y1 = y0 + sy, a, b, d, e;
+    function face(p, n, us, vs) { var i0 = g.vert(p[0][0], p[0][1], p[0][2], n[0], n[1], n[2], c, 0, 0), i1 = g.vert(p[1][0], p[1][1], p[1][2], n[0], n[1], n[2], c, us / uvm, 0), i2 = g.vert(p[2][0], p[2][1], p[2][2], n[0], n[1], n[2], c, us / uvm, vs / uvm), i3 = g.vert(p[3][0], p[3][1], p[3][2], n[0], n[1], n[2], c, 0, vs / uvm); g.quad(i0, i1, i2, i3); }
+    face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], sx, sy);
+    face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], sx, sy);
+    face([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], sz, sy);
+    face([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], sz, sy);
+    face([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], sx, sz);
+    if (!noBottom) face([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0], sx, sz);
+  }
+  // box rotated about y by yaw (used for road-aligned things)
+  function addBoxRot(g, cx, y0, cz, sx, sy, sz, yaw, c, uvm) {
+    var cs = Math.cos(yaw), sn = Math.sin(yaw); uvm = uvm || 4;
+    function P(lx, ly, lz) { return [cx + lx * cs + lz * sn, y0 + ly, cz - lx * sn + lz * cs]; }
+    function N(nx, ny, nz) { return [nx * cs + nz * sn, ny, -nx * sn + nz * cs]; }
+    var h = [sx / 2, sz / 2];
+    function face(pts, n, us, vs) { var nn = N(n[0], n[1], n[2]), ids = pts.map(function (p, k) { return g.vert(p[0], p[1], p[2], nn[0], nn[1], nn[2], c, (k === 1 || k === 2 ? us : 0) / uvm, (k >= 2 ? vs : 0) / uvm); }); g.quad(ids[0], ids[1], ids[2], ids[3]); }
+    var X = h[0], Z = h[1], Y = sy;
+    face([P(-X, 0, Z), P(X, 0, Z), P(X, Y, Z), P(-X, Y, Z)], [0, 0, 1], sx, sy);
+    face([P(X, 0, -Z), P(-X, 0, -Z), P(-X, Y, -Z), P(X, Y, -Z)], [0, 0, -1], sx, sy);
+    face([P(X, 0, Z), P(X, 0, -Z), P(X, Y, -Z), P(X, Y, Z)], [1, 0, 0], sz, sy);
+    face([P(-X, 0, -Z), P(-X, 0, Z), P(-X, Y, Z), P(-X, Y, -Z)], [-1, 0, 0], sz, sy);
+    face([P(-X, Y, Z), P(X, Y, Z), P(X, Y, -Z), P(-X, Y, -Z)], [0, 1, 0], sx, sz);
+  }
+  function addWalls(g, cx, cz, w, d, y0, h, c, uvm) {
+    var x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2, y1 = y0 + h;
+    function face(p, n, us) { var a = g.vert(p[0][0], p[0][1], p[0][2], n[0], n[1], n[2], c, 0, 0), b = g.vert(p[1][0], p[1][1], p[1][2], n[0], n[1], n[2], c, us / uvm, 0), cc = g.vert(p[2][0], p[2][1], p[2][2], n[0], n[1], n[2], c, us / uvm, h / uvm), e = g.vert(p[3][0], p[3][1], p[3][2], n[0], n[1], n[2], c, 0, h / uvm); g.quad(a, b, cc, e); }
+    face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], w);
+    face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], w);
+    face([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], d);
+    face([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], d);
+  }
+  function addCyl(g, cx, cz, y0, y1, r0, r1, segs, c, tx, tz) {
+    tx = tx || 0; tz = tz || 0;
+    for (var i = 0; i < segs; i++) {
+      var a0 = i / segs * 6.2832, a1 = (i + 1) / segs * 6.2832, c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+      var p = g.vert(cx + c0 * r0, y0, cz + s0 * r0, c0, 0.2, s0, c, i / segs, 0), q = g.vert(cx + c1 * r0, y0, cz + s1 * r0, c1, 0.2, s1, c, (i + 1) / segs, 0);
+      var r = g.vert(cx + tx + c1 * r1, y1, cz + tz + s1 * r1, c1, 0.2, s1, c, (i + 1) / segs, 1), s = g.vert(cx + tx + c0 * r1, y1, cz + tz + s0 * r1, c0, 0.2, s0, c, i / segs, 1);
+      g.quad(p, q, r, s);
+    }
+  }
+  function addTri(g, a, b, c, col) { var ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]; var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l; if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; } g.tri(g.vert(a[0], a[1], a[2], nx, ny, nz, col, 0, 0), g.vert(b[0], b[1], b[2], nx, ny, nz, col, 1, 0), g.vert(c[0], c[1], c[2], nx, ny, nz, col, 0, 1)); }
+  function unitQuad(c) { var g = new Geo(); var a = g.vert(-0.5, -0.5, 0, 0, 0, 1, c, 0, 1), b = g.vert(0.5, -0.5, 0, 0, 0, 1, c, 1, 1), d = g.vert(0.5, 0.5, 0, 0, 0, 1, c, 1, 0), e = g.vert(-0.5, 0.5, 0, 0, 0, 1, c, 0, 0); g.quad(a, b, d, e); return g.build(null); }
+
+  /* ---------------------------------------------------------------- textures */
+  function glTex(cnv, repeat, mip) {
+    if (!GLOK) return null;
+    var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cnv);
+    if (mip) { gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); } else gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    var w = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, w);
+    var an = gl.getExtension('EXT_texture_filter_anisotropic');
+    if (an && mip) gl.texParameterf(gl.TEXTURE_2D, an.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(an.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+    return t;
+  }
+  function mkCanvas(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+  /* ---------------------------------------------------------------- textures */
+  function mkCanvas(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  var trng = mulberry(777);
+  function texRoad() {
+    var c = mkCanvas(128, 256), x = c.getContext('2d'); x.fillStyle = '#3b3d43'; x.fillRect(0, 0, 128, 256);
+    for (var i = 0; i < 2600; i++) { var v = 44 + Math.floor(trng() * 46); x.fillStyle = 'rgba(' + v + ',' + v + ',' + (v + 4) + ',0.55)'; x.fillRect(trng() * 128, trng() * 256, 1 + trng() * 2, 1 + trng() * 2); }
+    // darker rubbered racing line bands
+    x.fillStyle = 'rgba(0,0,0,0.13)'; x.fillRect(0, 60, 128, 34); x.fillRect(0, 162, 128, 34);
+    x.fillStyle = '#eceff3'; x.fillRect(0, 7, 128, 6); x.fillRect(0, 243, 128, 6);
+    x.fillStyle = 'rgba(240,240,240,0.9)'; x.fillRect(0, 125, 64, 6);
+    return glTex(c, true, true);
+  }
+  function texGrass() {
+    var c = mkCanvas(256, 256), x = c.getContext('2d'); x.fillStyle = '#5f9a3f'; x.fillRect(0, 0, 256, 256);
+    for (var i = 0; i < 2200; i++) { x.fillStyle = 'rgba(' + (55 + Math.floor(trng() * 50)) + ',' + (120 + Math.floor(trng() * 60)) + ',' + (40 + Math.floor(trng() * 30)) + ',0.5)'; x.beginPath(); x.arc(trng() * 256, trng() * 256, 1 + trng() * 3.5, 0, 6.28); x.fill(); }
+    for (i = 0; i < 60; i++) { x.fillStyle = 'rgba(30,70,25,0.18)'; x.beginPath(); x.arc(trng() * 256, trng() * 256, 6 + trng() * 14, 0, 6.28); x.fill(); }
+    return glTex(c, true, true);
+  }
+  function texKerb() { var c = mkCanvas(64, 16), x = c.getContext('2d'); x.fillStyle = '#f2f2f2'; x.fillRect(0, 0, 64, 16); x.fillStyle = '#e0261d'; x.fillRect(0, 0, 32, 16); return glTex(c, true, true); }
+  function texChecker() { var c = mkCanvas(64, 64), x = c.getContext('2d'); for (var r = 0; r < 8; r++) for (var q = 0; q < 8; q++) { x.fillStyle = (r + q) % 2 ? '#101114' : '#f5f5f5'; x.fillRect(q * 8, r * 8, 8, 8); } return glTex(c, true, true); }
+  function texCrowd() {
+    var c = mkCanvas(256, 64), x = c.getContext('2d'); x.fillStyle = '#2a2d36'; x.fillRect(0, 0, 256, 64);
+    var cols = ['#b83a42', '#c9a93a', '#d8d8dc', '#4a7fb0', '#4f8f63', '#c27a3f', '#7d63a8', '#2a2c33', '#3b3f4a'];
+    for (var r = 0; r < 8; r++) for (var q = 0; q < 64; q++) { var cc = cols[Math.floor(trng() * cols.length)], px = q * 4 + (r % 2) * 2, py = r * 8 + 3; x.fillStyle = '#d9a67c'; x.beginPath(); x.arc(px + 2, py, 1.6, 0, 6.28); x.fill(); x.fillStyle = cc; x.fillRect(px, py + 1.5, 4, 4.5); }
+    x.fillStyle = 'rgba(14,16,24,0.28)'; x.fillRect(0, 0, 256, 64); x.fillStyle = 'rgba(0,0,0,0.35)'; for (r = 0; r < 8; r++) x.fillRect(0, r * 8 + 6, 256, 2);
+    return glTex(c, true, true);
+  }
+  function texBlob() { var c = mkCanvas(64, 64), x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 2, 32, 32, 30); g.addColorStop(0, 'rgba(0,0,0,0.7)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return glTex(c, false, false); }
+  function texGlow(r, g0, b) { var c = mkCanvas(128, 128), x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 2, 64, 64, 62); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.14, 'rgba(' + r + ',' + g0 + ',' + b + ',0.85)'); g.addColorStop(1, 'rgba(' + r + ',' + g0 + ',' + b + ',0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return glTex(c, false, false); }
+  function texCloud() { var c = mkCanvas(128, 64), x = c.getContext('2d'); for (var i = 0; i < 9; i++) { var cx = 20 + i * 11, cy = 36 + Math.sin(i * 1.7) * 6, r = 12 + (i % 3) * 5, g = x.createRadialGradient(cx, cy, 1, cx, cy, r); g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 64); } return glTex(c, false, false); }
+  function texBanner(text, bg, fg, sub) {
+    var c = mkCanvas(512, 128), x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, 512, 128);
+    x.fillStyle = 'rgba(255,255,255,0.1)'; x.beginPath(); x.moveTo(0, 0); x.lineTo(150, 0); x.lineTo(60, 128); x.lineTo(0, 128); x.fill();
+    x.fillStyle = fg; x.font = '400 84px "Bebas Neue", Impact, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    var s = 84; while (x.measureText(text).width > 470 && s > 20) { s -= 4; x.font = '400 ' + s + 'px "Bebas Neue", Impact, sans-serif'; }
+    x.fillText(text, 256, sub ? 52 : 68);
+    if (sub) { x.font = '600 26px Rajdhani, Arial, sans-serif'; x.fillText(sub, 256, 104); }
+    x.strokeStyle = 'rgba(255,255,255,0.35)'; x.lineWidth = 4; x.strokeRect(2, 2, 508, 124);
+    return glTex(c, false, true);
+  }
+
+  /* ---------------------------------------------------------------- track */
+  var HW = 12, KERB = 1.8, BAR = 22, DS = 4;
+  var CP = [[0,0],[250,0],[480,-10],[640,60],[720,200],[690,340],[560,420],[420,400],[330,330],[250,300],[160,350],[120,470],[190,570],[340,610],[500,600],[600,680],[560,790],[400,830],[200,800],[40,720],[-120,640],[-260,520],[-300,360],[-260,200],[-220,90],[-130,10]];
+  var TR = (function () {
+    CP = CP.map(function (p) { return [p[0] * 0.8, p[1] * 0.8]; }); var n = CP.length, dense = [], i, j;
+    function cr(p0, p1, p2, p3, t) { var t2 = t * t, t3 = t2 * t; return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3); }
+    for (i = 0; i < n; i++) for (j = 0; j < 24; j++) { var t = j / 24, a = CP[(i + n - 1) % n], b = CP[i], c = CP[(i + 1) % n], d = CP[(i + 2) % n]; dense.push([cr(a[0], b[0], c[0], d[0], t), cr(a[1], b[1], c[1], d[1], t)]); }
+    var cum = [0]; for (i = 1; i <= dense.length; i++) { var p = dense[i - 1], q = dense[i % dense.length]; cum.push(cum[i - 1] + Math.hypot(q[0] - p[0], q[1] - p[1])); }
+    var Lt = cum[cum.length - 1], N = Math.round(Lt / DS), ds = Lt / N, X = [], Z = [], k = 0;
+    for (i = 0; i < N; i++) { var s = i * ds; while (cum[k + 1] < s) k++; var f = (s - cum[k]) / (cum[k + 1] - cum[k]), p0 = dense[k], p1 = dense[(k + 1) % dense.length]; X.push(p0[0] + (p1[0] - p0[0]) * f); Z.push(p0[1] + (p1[1] - p0[1]) * f); }
+    var TX = [], TZ = [], NX = [], NZ = [], KAP = [], VP = [];
+    for (i = 0; i < N; i++) { var a = (i + N - 1) % N, b = (i + 1) % N, dx = X[b] - X[a], dz = Z[b] - Z[a], l = Math.hypot(dx, dz); TX.push(dx / l); TZ.push(dz / l); NX.push(-dz / l); NZ.push(dx / l); }
+    for (i = 0; i < N; i++) { var a2 = (i + N - 5) % N, b2 = (i + 5) % N; KAP.push(Math.abs(angDiff(Math.atan2(TZ[b2], TX[b2]), Math.atan2(TZ[a2], TX[a2]))) / (10 * ds)); }
+    // smooth + speed profile for rivals
+    var ks = KAP.slice(); for (i = 0; i < N; i++) { var m = 0; for (j = -4; j <= 4; j++) m = Math.max(m, KAP[(i + j + N) % N]); ks[i] = m; }
+    for (i = 0; i < N; i++) VP.push(Math.min(70, Math.max(20, Math.sqrt(24 / Math.max(ks[i], 1e-4)))));
+    for (var rep = 0; rep < 3; rep++) for (i = N * 2 - 1; i >= 0; i--) { var ii = i % N, nx = (ii + 1) % N; VP[ii] = Math.min(VP[ii], Math.sqrt(VP[nx] * VP[nx] + 2 * 21 * ds)); }
+    for (rep = 0; rep < 2; rep++) for (i = 0; i < N * 2; i++) { var i2 = i % N, pv = (i2 + N - 1) % N; VP[i2] = Math.min(VP[i2], Math.sqrt(VP[pv] * VP[pv] + 2 * 11 * ds)); }
+    return { N: N, L: Lt, ds: ds, X: X, Z: Z, TX: TX, TZ: TZ, NX: NX, NZ: NZ, KAP: ks, VP: VP };
+  })();
+  function trkPoint(s, off) {
+    var N = TR.N; s = ((s % TR.L) + TR.L) % TR.L; var f = s / TR.ds, i = Math.floor(f) % N, j = (i + 1) % N, u = f - Math.floor(f);
+    var x = TR.X[i] + (TR.X[j] - TR.X[i]) * u, z = TR.Z[i] + (TR.Z[j] - TR.Z[i]) * u, tx = TR.TX[i] + (TR.TX[j] - TR.TX[i]) * u, tz = TR.TZ[i] + (TR.TZ[j] - TR.TZ[i]) * u, l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
+    return { x: x - tz * off, z: z + tx * off, tx: tx, tz: tz, i: i, vp: TR.VP[i] + (TR.VP[j] - TR.VP[i]) * u };
+  }
+  function trkNearest(x, z, hint) {
+    var N = TR.N, best = 1e9, bi = hint, i, k;
+    for (k = -24; k <= 24; k++) { i = (hint + k + N) % N; var d = (TR.X[i] - x) * (TR.X[i] - x) + (TR.Z[i] - z) * (TR.Z[i] - z); if (d < best) { best = d; bi = i; } }
+    var dx = x - TR.X[bi], dz = z - TR.Z[bi];
+    return { i: bi, off: dx * TR.NX[bi] + dz * TR.NZ[bi], along: dx * TR.TX[bi] + dz * TR.TZ[bi] };
+  }
+
+  /* ---------------------------------------------------------------- mesh helpers */
+  function ribbon(g, o0, o1, y, c, uvA, vspan) {
+    var N = TR.N, i, prev = null;
+    for (i = 0; i <= N; i++) {
+      var k = i % N, u = i * TR.ds / uvA;
+      var a = g.vert(TR.X[k] + TR.NX[k] * o0, y, TR.Z[k] + TR.NZ[k] * o0, 0, 1, 0, c, u, 0), b = g.vert(TR.X[k] + TR.NX[k] * o1, y, TR.Z[k] + TR.NZ[k] * o1, 0, 1, 0, c, u, vspan || 1);
+      if (prev) g.quad(prev[0], a, b, prev[1]);
+      prev = [a, b];
+    }
+  }
+  function vribbon(g, o, y0, y1, colFn, side) {
+    var N = TR.N, i, prev = null;
+    for (i = 0; i <= N; i++) {
+      var k = i % N, c = colFn(i), nx = -TR.NX[k] * side, nz = -TR.NZ[k] * side;
+      var a = g.vert(TR.X[k] + TR.NX[k] * o, y0, TR.Z[k] + TR.NZ[k] * o, nx, 0, nz, c, 0, 0), b = g.vert(TR.X[k] + TR.NX[k] * o, y1, TR.Z[k] + TR.NZ[k] * o, nx, 0, nz, c, 0, 1);
+      if (prev) g.quad(prev[0], a, b, prev[1]);
+      prev = [a, b];
+    }
+  }
+  function addPalm(g, x, z, h, rng) {
+    var lean = (rng() - 0.5) * 1.6, tx = lean, segs = 6, c1 = [0.45, 0.34, 0.24];
+    addCyl(g, x, z, 0, h, 0.32, 0.18, 7, c1, lean, 0);
+    var topx = x + tx, topz = z, n = 7;
+    for (var k = 0; k < n; k++) {
+      var a = k / n * 6.283 + rng() * 0.4, ca = Math.cos(a), sa = Math.sin(a), L = 3.4 + rng() * 1.1, px = -sa * 0.55, pz = ca * 0.55;
+      var tipx = topx + ca * L, tipz = topz + sa * L, tipy = h - 1.1 - rng() * 0.6, mx = topx + ca * L * 0.5, mz = topz + sa * L * 0.5, my = h + 0.55;
+      var gc = [0.2 + rng() * 0.08, 0.5 + rng() * 0.12, 0.2];
+      addTri(g, [topx, h, topz], [mx + px, my, mz + pz], [mx - px, my, mz - pz], gc);
+      addTri(g, [mx + px, my, mz + pz], [mx - px, my, mz - pz], [tipx, tipy, tipz], gc);
+    }
+  }
+  function addTree(g, x, z, h, rng) {
+    addCyl(g, x, z, 0, h * 0.35, 0.3, 0.22, 6, [0.36, 0.26, 0.18]);
+    var gcol = [0.16 + rng() * 0.1, 0.38 + rng() * 0.16, 0.16 + rng() * 0.06];
+    addCyl(g, x, z, h * 0.22, h * 0.7, h * 0.34, h * 0.12, 8, gcol);
+    addCyl(g, x, z, h * 0.5, h, h * 0.24, 0.05, 8, [gcol[0] * 1.1, gcol[1] * 1.1, gcol[2]]);
+  }
+
+  /* ---------------------------------------------------------------- the world */
+  var W3 = {};
+  function buildWorld() {
+    var rng = mulberry(31), i, g;
+    W3.tex = { road: texRoad(), grass: texGrass(), kerb: texKerb(), check: texChecker(), crowd: texCrowd(), blob: texBlob(), sun: texGlow(255, 214, 140), cloud: texCloud() };
+    // ground
+    g = new Geo(); (function () { var G = 4200, n = 28, cx = 200, cz = 420, i, j, ids = []; for (i = 0; i <= n; i++) { ids.push([]); for (j = 0; j <= n; j++) ids[i].push(g.vert(cx - G + 2 * G * i / n, -0.3, cz - G + 2 * G * j / n, 0, 1, 0, [1, 1, 1], 2 * G * i / n / 22, 2 * G * j / n / 22)); } for (i = 0; i < n; i++) for (j = 0; j < n; j++) g.quad(ids[i][j], ids[i + 1][j], ids[i + 1][j + 1], ids[i][j + 1]); })();
+    W3.ground = g.build(W3.tex.grass);
+    g = new Geo(); ribbon(g, -(BAR + 2), -KERB - HW, 0.03, [0.66, 0.62, 0.5], 10, 1); ribbon(g, HW + KERB, BAR + 2, 0.03, [0.66, 0.62, 0.5], 10, 1); W3.gravel = g.build(null);
+    g = new Geo(); ribbon(g, -HW, HW, 0.07, [1, 1, 1], 16, 1); W3.road = g.build(W3.tex.road);
+    g = new Geo(); ribbon(g, -HW - KERB, -HW, 0.1, [1, 1, 1], 4, 1); ribbon(g, HW, HW + KERB, 0.1, [1, 1, 1], 4, 1); W3.kerb = g.build(W3.tex.kerb);
+    g = new Geo(); vribbon(g, -BAR, 0, 0.55, function () { return [0.56, 0.58, 0.62]; }, -1); vribbon(g, BAR, 0, 0.55, function () { return [0.56, 0.58, 0.62]; }, 1);
+    vribbon(g, -BAR, 0.55, 1.1, function (k) { return (k >> 2) % 2 ? [0.92, 0.92, 0.94] : [0.88, 0.14, 0.12]; }, -1); vribbon(g, BAR, 0.55, 1.1, function (k) { return (k >> 2) % 2 ? [0.92, 0.92, 0.94] : [0.88, 0.14, 0.12]; }, 1);
+    W3.rail = g.build(null);
+    // start line
+    g = new Geo(); (function () { var k = 0, n = 6, p = [-HW, HW]; var a0 = g.vert(TR.X[k] + TR.NX[k] * p[0], 0.12, TR.Z[k] + TR.NZ[k] * p[0], 0, 1, 0, [1, 1, 1], 0, 0), b0 = g.vert(TR.X[k] + TR.NX[k] * p[1], 0.12, TR.Z[k] + TR.NZ[k] * p[1], 0, 1, 0, [1, 1, 1], 12, 0), c0 = g.vert(TR.X[k] + TR.NX[k] * p[1] + TR.TX[k] * 3, 0.12, TR.Z[k] + TR.NZ[k] * p[1] + TR.TZ[k] * 3, 0, 1, 0, [1, 1, 1], 12, 1), d0 = g.vert(TR.X[k] + TR.NX[k] * p[0] + TR.TX[k] * 3, 0.12, TR.Z[k] + TR.NZ[k] * p[0] + TR.TZ[k] * 3, 0, 1, 0, [1, 1, 1], 0, 1); g.quad(a0, b0, c0, d0); })();
+    W3.startline = g.build(W3.tex.check);
+    // scenery
+    var gTrees = new Geo(), gPalm = new Geo(), gLamp = new Geo(), gLampHead = new Geo(), n, ok, j;
+    var cand = 0;
+    for (i = 0; i < TR.N; i += 2) for (var side = -1; side <= 1; side += 2) {
+      if (rng() < 0.45) continue;
+      var off = BAR + 9 + rng() * 70, x = TR.X[i] + TR.NX[i] * off * side, z = TR.Z[i] + TR.NZ[i] * off * side;
+      if (x > -150 && x < 230 && Math.abs(z) < 90) continue;
+      ok = true; for (j = 0; j < TR.N; j += 3) { var dd = (TR.X[j] - x) * (TR.X[j] - x) + (TR.Z[j] - z) * (TR.Z[j] - z); if (dd < (BAR + 6) * (BAR + 6)) { ok = false; break; } }
+      if (!ok) continue; cand++;
+      if (rng() < 0.55) addPalm(gPalm, x, z, 8 + rng() * 5, rng); else addTree(gTrees, x, z, 7 + rng() * 6, rng);
+    }
+    W3.trees = gTrees.build(null); W3.palms = gPalm.build(null);
+    for (i = 0; i < TR.N; i += 9) {
+      var sd = (i / 9) % 2 ? 1 : -1, lo = BAR + 3, lx = TR.X[i] + TR.NX[i] * lo * sd, lz = TR.Z[i] + TR.NZ[i] * lo * sd, yaw = Math.atan2(-TR.NZ[i] * sd, -TR.NX[i] * sd);
+      addCyl(gLamp, lx, lz, 0, 10, 0.16, 0.1, 6, [0.5, 0.52, 0.56]);
+      var ax = lx - TR.NX[i] * sd * 2.2, az = lz - TR.NZ[i] * sd * 2.2;
+      addBoxRot(gLamp, (lx + ax) / 2, 9.8, (lz + az) / 2, 2.6, 0.12, 0.12, -Math.atan2(TR.NZ[i] * -sd, TR.NX[i] * -sd) + 0, [0.5, 0.52, 0.56], 4);
+      addBoxRot(gLampHead, ax, 9.7, az, 1.0, 0.1, 0.35, -Math.atan2(TR.NZ[i] * -sd, TR.NX[i] * -sd), [1, 0.96, 0.8], 4);
+    }
+    W3.lamps = gLamp.build(null); W3.lampHeads = gLampHead.build(null);
+    // distant hills
+    g = new Geo(); for (i = 0; i < 46; i++) { var an = i / 46 * 6.283 + rng() * 0.1, rr = 1500 + rng() * 500, hh = 90 + rng() * 190; addCyl(g, 200 + Math.cos(an) * rr, 420 + Math.sin(an) * rr, -4, hh, 330 + rng() * 240, 40, 9, [0.3 + rng() * 0.06, 0.42 + rng() * 0.08, 0.34]); }
+    W3.hills = g.build(null);
+    // sky dome
+    g = new Geo(); (function () { var R = 2600, rows = 9, segs = 16, top = [0.18, 0.4, 0.82], hor = [0.74, 0.88, 0.97], prev = null; for (var r = 0; r <= rows; r++) { var e = r / rows * 1.5, ce = Math.cos(e), se = Math.sin(e), t = Math.pow(r / rows, 0.7), col = [hor[0] + (top[0] - hor[0]) * t, hor[1] + (top[1] - hor[1]) * t, hor[2] + (top[2] - hor[2]) * t], row = []; for (var s2 = 0; s2 <= segs; s2++) { var an2 = s2 / segs * 6.283; row.push(g.vert(Math.cos(an2) * ce * R, se * R - 60, Math.sin(an2) * ce * R, 0, -1, 0, col, 0, 0)); } if (prev) for (s2 = 0; s2 < segs; s2++) g.quad(prev[s2], prev[s2 + 1], row[s2 + 1], row[s2]); prev = row; } })();
+    W3.sky = g.build(null);
+    W3.quad = unitQuad([1, 1, 1]); g = new Geo(); (function () { var a = g.vert(-0.5, 0.15, -0.5, 0, 1, 0, [1, 1, 1], 0, 0), b = g.vert(0.5, 0.15, -0.5, 0, 1, 0, [1, 1, 1], 1, 0), c = g.vert(0.5, 0.15, 0.5, 0, 1, 0, [1, 1, 1], 1, 1), d = g.vert(-0.5, 0.15, 0.5, 0, 1, 0, [1, 1, 1], 0, 1); g.quad(a, b, c, d); })(); W3.blobq = g.build(W3.tex.blob);
+    // stands
+    g = new Geo(); var gs = new Geo(); var gp = new Geo();
+    [-1, 1].forEach(function (sd) {
+      var z0 = sd * (BAR + 8), z1 = sd * (BAR + 28), xa = -90, xb = 170, y0 = 0.6, y1 = 12;
+      var A = g.vert(xa, y0, z0, 0, 0.6, -sd * 0.8, [1, 1, 1], 0, 0), B = g.vert(xb, y0, z0, 0, 0.6, -sd * 0.8, [1, 1, 1], (xb - xa) / 14, 0), C = g.vert(xb, y1, z1, 0, 0.6, -sd * 0.8, [1, 1, 1], (xb - xa) / 14, 1.4), D = g.vert(xa, y1, z1, 0, 0.6, -sd * 0.8, [1, 1, 1], 0, 1.4);
+      g.quad(A, B, C, D);
+      addBox(gs, xa, 0, (z0 + z1) / 2, 0.5, y1, Math.abs(z1 - z0), [0.3, 0.32, 0.36], 4); addBox(gs, xb, 0, (z0 + z1) / 2, 0.5, y1, Math.abs(z1 - z0), [0.3, 0.32, 0.36], 4);
+      addBox(gs, (xa + xb) / 2, y1 + 3.6, sd * (BAR + 17), xb - xa + 4, 0.5, 26, [0.9, 0.9, 0.92], 6);
+      for (var px = xa; px <= xb; px += 40) addCyl(gs, px, sd * (BAR + 26), 0, y1 + 3.6, 0.3, 0.3, 6, [0.4, 0.42, 0.46]);
+      addBox(gs, (xa + xb) / 2, 0, z0 - sd * 0.5, xb - xa, 1.6, 0.4, [0.25, 0.27, 0.3], 4);
+    });
+    W3.crowd = g.build(W3.tex.crowd); W3.stands = gs.build(null);
+    // gantry
+    g = new Geo(); addBox(g, 0, 0, -HW - 2.2, 1.4, 11.6, 1.4, [0.16, 0.17, 0.2], 4); addBox(g, 0, 0, HW + 2.2, 1.4, 11.6, 1.4, [0.16, 0.17, 0.2], 4); addBox(g, 0, 8.4, 0, 1.6, 3.2, 2 * HW + 6, [0.12, 0.13, 0.16], 4);
+    W3.gantry = g.build(null);
+    W3.banners = [
+      { t: texBanner('LOADOUT', '#0b0d12', '#ffffff', 'AI GAME COMPETITION'), w: 26, h: 6.5 },
+      { t: texBanner('UYO', '#d8151f', '#ffffff', 'AKWA IBOM STATE'), w: 24, h: 6 },
+      { t: texBanner('APEX RUSH GP', '#14161c', '#ffc531', 'THREE LAPS TO GLORY'), w: 26, h: 6.5 },
+      { t: texBanner('FULL THROTTLE', '#1d4fd8', '#ffffff', 'BRAKE LATE, WIN BIG'), w: 24, h: 6 }
+    ];
+    W3.startBanner = texBanner('START / FINISH', '#101114', '#ffffff', 'APEX RUSH GP');
+    W3.bi = [];
+    var bs = [ [0.06, 1], [0.15, -1], [0.24, 1], [0.33, -1], [0.43, 1], [0.52, -1], [0.62, 1], [0.7, -1], [0.78, 1], [0.88, -1], [0.95, 1] ];
+    bs.forEach(function (q, k) { var idx = Math.floor(q[0] * TR.N), sd = q[1], off = (BAR + 2.5) * sd, x = TR.X[idx] + TR.NX[idx] * off, z = TR.Z[idx] + TR.NZ[idx] * off, bn = W3.banners[k % W3.banners.length]; W3.bi.push({ b: bn, x: x, z: z, yaw: Math.atan2(-TR.NX[idx] * sd, -TR.NZ[idx] * sd) }); });
+    // poles for banners
+    g = new Geo(); W3.bi.forEach(function (q) { var cs = Math.cos(q.yaw), sn = Math.sin(q.yaw); [-1, 1].forEach(function (e) { addCyl(g, q.x - cs * e * (q.b.w / 2 - 1) - sn * 0.3, q.z + sn * e * (q.b.w / 2 - 1) - cs * 0.3, 0, 2.6, 0.2, 0.2, 5, [0.3, 0.32, 0.36]); }); }); W3.bpoles = g.build(null);
+    // clouds
+    W3.clouds = []; for (i = 0; i < 18; i++) W3.clouds.push({ a: rng() * 6.283, h: 400 + rng() * 380, r: 1500 + rng() * 600, s: 420 + rng() * 480 });
+  }
+
+  /* ---------------------------------------------------------------- car model */
+  function loft(g, secs, N, col) {
+    var rings = [], r, k;
+    secs.forEach(function (s) {
+      var ring = [], hh = (s[3] - s[2]) / 2, cy = (s[2] + s[3]) / 2, p = s[4];
+      for (k = 0; k < N; k++) {
+        var t = k / N * 6.2832, c = Math.cos(t), sn = Math.sin(t), ex = (c < 0 ? -1 : 1) * Math.pow(Math.abs(c), 2 / p), ey = (sn < 0 ? -1 : 1) * Math.pow(Math.abs(sn), 2 / p);
+        var nz = (c < 0 ? -1 : 1) * Math.pow(Math.abs(c), p - 1) / s[1], ny = (sn < 0 ? -1 : 1) * Math.pow(Math.abs(sn), p - 1) / hh, nl = Math.hypot(nz, ny) || 1;
+        ring.push([s[0], cy + hh * ey, s[1] * ex, 0, ny / nl, nz / nl]);
+      }
+      rings.push(ring);
+    });
+    // slope term for x normals
+    var vi = rings.map(function (ring, j) {
+      var dxw = j === 0 ? (secs[1][1] - secs[0][1]) / (secs[1][0] - secs[0][0]) : j === rings.length - 1 ? (secs[j][1] - secs[j - 1][1]) / (secs[j][0] - secs[j - 1][0]) : (secs[j + 1][1] - secs[j - 1][1]) / (secs[j + 1][0] - secs[j - 1][0]);
+      return ring.map(function (v) { var nx = -dxw * Math.abs(v[5]) * 0.9; if (j === 0) nx = -0.8; if (j === rings.length - 1) nx = 0.8; var l = Math.hypot(nx, v[4], v[5]); return g.vert(v[0], v[1], v[2], nx / l, v[4] / l, v[5] / l, col, 0, 0); });
+    });
+    for (r = 0; r < vi.length - 1; r++) for (k = 0; k < N; k++) g.quad(vi[r][k], vi[r][(k + 1) % N], vi[r + 1][(k + 1) % N], vi[r + 1][k]);
+    [0, vi.length - 1].forEach(function (j) { var cc = g.vert(secs[j][0], (secs[j][2] + secs[j][3]) / 2, 0, j ? 1 : -1, 0, 0, col, 0, 0); for (k = 0; k < N; k++) g.tri(cc, vi[j][k], vi[j][(k + 1) % N]); });
+  }
+  function addWheel(g, gr, cx, cy, cz, R, wd) {
+    var segs = 16, k, ring0 = [], ring1 = [], tcol = [0.07, 0.07, 0.08], z0 = cz - wd / 2, z1 = cz + wd / 2;
+    for (k = 0; k <= segs; k++) { var t = k / segs * 6.2832, c = Math.cos(t), s = Math.sin(t); ring0.push(g.vert(cx + c * R, cy + s * R, z0, c, s, 0, tcol, 0, 0)); ring1.push(g.vert(cx + c * R, cy + s * R, z1, c, s, 0, tcol, 0, 0)); if (k) g.quad(ring0[k - 1], ring0[k], ring1[k], ring1[k - 1]); }
+    var side = cz > 0 ? 1 : -1, zf = side > 0 ? z1 + 0.002 : z0 - 0.002, rc = [0.82, 0.84, 0.88], ctr = gr.vert(cx, cy, zf, 0, 0, side, rc, 0, 0), prev = -1;
+    for (k = 0; k <= segs; k++) { var t2 = k / segs * 6.2832, v = gr.vert(cx + Math.cos(t2) * R * 0.72, cy + Math.sin(t2) * R * 0.72, zf, 0, 0, side, (k % 4 < 2) ? rc : [0.5, 0.52, 0.56], 0, 0); if (prev >= 0) gr.tri(ctr, prev, v); prev = v; }
+    var hub = gr.vert(cx, cy, zf + 0.004 * side, 0, 0, side, [0.12, 0.12, 0.14], 0, 0); prev = -1;
+    for (k = 0; k <= 10; k++) { var t3 = k / 10 * 6.2832, v2 = gr.vert(cx + Math.cos(t3) * R * 0.22, cy + Math.sin(t3) * R * 0.22, zf + 0.004 * side, 0, 0, side, [0.12, 0.12, 0.14], 0, 0); if (prev >= 0) gr.tri(hub, prev, v2); prev = v2; }
+  }
+  var CAR = {};
+  function buildCar() {
+    var body = new Geo(), glass = new Geo(), trim = new Geo(), rim = new Geo(), lamp = new Geo(), tail = new Geo(), W = [1, 1, 1];
+    loft(body, [[-2.35, .55, .40, .62, 2.4], [-2.25, .82, .30, .85, 2.6], [-1.95, .98, .26, 1.02, 3.0], [-1.3, 1.02, .24, 1.06, 3.2], [-0.6, 1.0, .22, .98, 3.2], [0.3, .96, .2, .86, 3.0], [1.1, .92, .18, .70, 2.8], [1.8, .84, .16, .56, 2.6], [2.25, .62, .15, .44, 2.4], [2.35, .38, .16, .34, 2.2]], 22, W);
+    loft(glass, [[-1.25, .55, .95, 1.08, 2.4], [-0.9, .72, .9, 1.24, 2.6], [-0.2, .76, .84, 1.30, 2.6], [0.45, .72, .78, 1.18, 2.6], [1.05, .6, .74, .92, 2.4]], 16, [0.05, 0.08, 0.12]);
+    addWheel(trim, rim, 1.38, 0.38, 0.93, 0.38, 0.3); addWheel(trim, rim, 1.38, 0.38, -0.93, 0.38, 0.3); addWheel(trim, rim, -1.3, 0.4, 0.95, 0.4, 0.36); addWheel(trim, rim, -1.3, 0.4, -0.95, 0.4, 0.36);
+    var cf = [0.08, 0.08, 0.1];
+    addBox(trim, 2.18, 0.1, 0, 0.55, 0.05, 1.8, cf, 2, true); addBox(trim, -2.28, 0.16, 0, 0.5, 0.14, 1.3, cf, 2, true);
+    addBox(trim, -2.1, 1.1, 0, 0.55, 0.05, 1.9, cf, 2, true); addBox(trim, -2.0, 0.85, 0.55, 0.12, 0.28, 0.06, cf, 2, true); addBox(trim, -2.0, 0.85, -0.55, 0.12, 0.28, 0.06, cf, 2, true);
+    addBox(trim, 2.3, 0.2, 0, 0.1, 0.14, 0.62, [0.03, 0.03, 0.04], 2, true);
+    addBox(trim, 0.55, 0.95, 1.03, 0.22, 0.1, 0.18, cf, 2, true); addBox(trim, 0.55, 0.95, -1.03, 0.22, 0.1, 0.18, cf, 2, true);
+    addBox(trim, -0.35, 0.18, 0, 3.6, 0.06, 1.7, [0.04, 0.04, 0.05], 3, true);
+    addBox(lamp, 2.17, 0.48, 0.58, 0.14, 0.08, 0.44, [1, 1, 0.95], 2, true); addBox(lamp, 2.17, 0.48, -0.58, 0.14, 0.08, 0.44, [1, 1, 0.95], 2, true);
+    addBox(tail, -2.33, 0.74, 0, 0.06, 0.08, 1.4, [1, 0.12, 0.1], 2, true);
+    CAR.body = body.build(null); CAR.glass = glass.build(null); CAR.trim = trim.build(null); CAR.rim = rim.build(null); CAR.lamp = lamp.build(null); CAR.tail = tail.build(null);
+  }
+
+  /* ---------------------------------------------------------------- state */
+  var LAPS = 2, NCARS = 6;
+  var mode = 'title', paused = false, raceT = 0, modeT = 0, soundOn = true, camMode = 0, colorSel = 0;
+  var COLS = [[0.11, 0.3, 0.85, 'Cobalt'], [0.8, 0.82, 0.86, 'Silver'], [0.85, 0.08, 0.12, 'Crimson'], [0.95, 0.72, 0.03, 'Gold']];
+  var AICOL = [[0.9, 0.9, 0.92], [0.12, 0.12, 0.14], [0.85, 0.35, 0.05], [0.1, 0.55, 0.35], [0.5, 0.15, 0.7], [0.1, 0.5, 0.85]];
+  var input = { gas: false, brake: false, left: false, right: false }, keys = {}, touchIn = { gas: false, brake: false, left: false, right: false };
+  var P = null, AI = [], shake = 0, toastT = 0, camYaw = 0, camPos = [0, 5, 0], shiftT = 0, lastGear = 1;
+
+  function mkPlayer() {
+    var pt = trkPoint(TR.L - (6 + 8 * 4), (4 % 2 ? 4 : -4)), h = Math.atan2(pt.tz, pt.tx);
+    return { x: pt.x, z: pt.z, h: h, th: h, s: 0, steer: 0, idx: pt.i, lapC: -1, off: 0, prog: 0, lapStart: 0, best: 0, lastLap: 0, fin: false, finT: 0, offroad: false, roll: 0, pitch: 0, acc: 0, slip: 0, stuck: 0, brkL: 0, spd: 0 };
+  }
+  function mkAI() {
+    var out = [], k, slot = 0;
+    for (k = 0; k < NCARS; k++) {
+      if (k === 4) continue;
+      var off = (k % 2 ? 4 : -4), prog = -(6 + 8 * k);
+      out.push({ prog: prog, off: off, tgt: off, v: 0, skill: 0.8 + (slot * 0.02) + Math.random() * 0.02, col: AICOL[slot % AICOL.length], x: 0, z: 0, h: 0, fin: false, finT: 0, name: ['Okon', 'Ekong', 'Inyang', 'Ubong', 'Effiong'][slot], yawv: 0 });
+      slot++;
+    }
+    return out;
+  }
+  function resetRace() {
+    P = mkPlayer(); AI = mkAI(); raceT = 0; modeT = 0; shake = 0; camYaw = P.h; lastGear = 1;
+    var q = trkNearest(P.x, P.z, P.idx); P.idx = q.i;
+    AI.forEach(function (a) { updateAIpos(a); });
+  }
+  function updateAIpos(a) {
+    var pt = trkPoint(a.prog, a.off); a.x = pt.x; a.z = pt.z; var th = Math.atan2(pt.tz, pt.tx), want = th + clamp((a.tgt - a.off) * 0.12, -0.25, 0.25); a.h += angDiff(want, a.h) * 0.25; if (a.h === 0) a.h = want; a.hh = a.h;
+  }
+
+  /* ---------------------------------------------------------------- audio */
+  var AC = null, master, musicG, sfxG, eng = {}, noiseBuf, musicTimer = null, nextStep = 0, stepN = 0, tempo = 124;
+  function audioInit() {
+    if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+    var A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    try {
+      AC = new A(); master = AC.createGain(); master.gain.value = soundOn ? 0.85 : 0; master.connect(AC.destination);
+      musicG = AC.createGain(); musicG.gain.value = 0.34; musicG.connect(master); sfxG = AC.createGain(); sfxG.gain.value = 1; sfxG.connect(master);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); var d = noiseBuf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      // engine
+      eng.g = AC.createGain(); eng.g.gain.value = 0; eng.f = AC.createBiquadFilter(); eng.f.type = 'lowpass'; eng.f.Q.value = 2.2; eng.f.frequency.value = 600;
+      eng.o1 = AC.createOscillator(); eng.o1.type = 'sawtooth'; eng.o2 = AC.createOscillator(); eng.o2.type = 'square'; eng.o3 = AC.createOscillator(); eng.o3.type = 'sawtooth';
+      var g1 = AC.createGain(), g2 = AC.createGain(), g3 = AC.createGain(); g1.gain.value = 0.5; g2.gain.value = 0.35; g3.gain.value = 0.16;
+      eng.o1.connect(g1); eng.o2.connect(g2); eng.o3.connect(g3); g1.connect(eng.f); g2.connect(eng.f); g3.connect(eng.f); eng.f.connect(eng.g); eng.g.connect(sfxG);
+      eng.o1.start(); eng.o2.start(); eng.o3.start();
+      // tyre noise
+      eng.sg = AC.createGain(); eng.sg.gain.value = 0; eng.sf = AC.createBiquadFilter(); eng.sf.type = 'bandpass'; eng.sf.frequency.value = 1700; eng.sf.Q.value = 3;
+      eng.sn = AC.createBufferSource(); eng.sn.buffer = noiseBuf; eng.sn.loop = true; eng.sn.connect(eng.sf); eng.sf.connect(eng.sg); eng.sg.connect(sfxG); eng.sn.start();
+      // wind + rumble
+      eng.wg = AC.createGain(); eng.wg.gain.value = 0; eng.wf = AC.createBiquadFilter(); eng.wf.type = 'highpass'; eng.wf.frequency.value = 900;
+      eng.wn = AC.createBufferSource(); eng.wn.buffer = noiseBuf; eng.wn.loop = true; eng.wn.playbackRate.value = 0.8; eng.wn.connect(eng.wf); eng.wf.connect(eng.wg); eng.wg.connect(sfxG); eng.wn.start();
+      eng.rg = AC.createGain(); eng.rg.gain.value = 0; eng.rf = AC.createBiquadFilter(); eng.rf.type = 'lowpass'; eng.rf.frequency.value = 220;
+      eng.rn = AC.createBufferSource(); eng.rn.buffer = noiseBuf; eng.rn.loop = true; eng.rn.connect(eng.rf); eng.rf.connect(eng.rg); eng.rg.connect(sfxG); eng.rn.start();
+      // crowd
+      eng.cg = AC.createGain(); eng.cg.gain.value = 0.0; eng.cf = AC.createBiquadFilter(); eng.cf.type = 'bandpass'; eng.cf.frequency.value = 700; eng.cf.Q.value = 0.6;
+      eng.cn = AC.createBufferSource(); eng.cn.buffer = noiseBuf; eng.cn.loop = true; eng.cn.playbackRate.value = 0.6; eng.cn.connect(eng.cf); eng.cf.connect(eng.cg); eng.cg.connect(sfxG); eng.cn.start();
+      nextStep = AC.currentTime + 0.1; stepN = 0; musicTimer = setInterval(musicTick, 30);
+    } catch (e) { AC = null; }
+  }
+  function setSound(on) { soundOn = on; if (master) master.gain.setTargetAtTime(on ? 0.85 : 0, AC.currentTime, 0.05); $('sndWave').style.display = on ? '' : 'none'; }
+  function tone(freq, dur, type, vol, when, dest, slide) {
+    if (!AC) return; var t = when || AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(dest || sfxG); o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noiseHit(dur, vol, f, when, type, dest) {
+    if (!AC) return; var t = when || AC.currentTime, s = AC.createBufferSource(), fl = AC.createBiquadFilter(), g = AC.createGain(); s.buffer = noiseBuf; fl.type = type || 'lowpass'; fl.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(fl); fl.connect(g); g.connect(dest || sfxG); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  }
+  var NOTES = [57, 57, 60, 64, 55, 55, 59, 62, 53, 53, 57, 60, 55, 55, 59, 62];
+  function mf(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+  function musicTick() {
+    if (!AC || AC.state !== 'running') return;
+    var spb = 60 / tempo / 4;
+    while (nextStep < AC.currentTime + 0.12) {
+      var s = stepN % 16, bar = Math.floor(stepN / 16) % 4, t = nextStep, intense = mode === 'race' || mode === 'finish';
+      if (s % 4 === 0) { tone(150, 0.14, 'sine', 0.9, t, musicG, 42); noiseHit(0.03, 0.2, 3000, t, 'highpass', musicG); }
+      if (s % 4 === 2) noiseHit(0.05, 0.14, 7000, t, 'highpass', musicG);
+      if (s === 4 || s === 12) noiseHit(0.12, 0.3, 2200, t, 'bandpass', musicG);
+      if (intense || stepN > 32) {
+        var bn = NOTES[bar * 4 + (s >> 2) % 4] - 24; if (s % 2 === 0 || s % 4 === 3) tone(mf(bn), spb * 1.6, 'sawtooth', 0.22, t, musicG);
+        var an = NOTES[bar * 4 + (s % 4)] + (s % 8 < 4 ? 12 : 24); tone(mf(an), spb * 0.9, 'square', intense ? 0.07 : 0.045, t, musicG);
+      } else { tone(mf(NOTES[bar * 4 + (s >> 2)] - 12), spb * 3, 'triangle', 0.2, t, musicG); }
+      nextStep += spb; stepN++;
+    }
+  }
+  function engineUpdate(dt) {
+    if (!AC || !P) return;
+    var t = AC.currentTime, racing = (mode === 'race' || mode === 'grid' || mode === 'finish') && !paused, sp = Math.abs(P.s), gear = P.gear || 1, rpm = P.rpm || 0.2;
+    var f = 38 + rpm * 190, thr = (input.gas && mode === 'race') ? 1 : 0;
+    eng.o1.frequency.setTargetAtTime(f, t, 0.03); eng.o2.frequency.setTargetAtTime(f * 0.5, t, 0.03); eng.o3.frequency.setTargetAtTime(f * 2.01, t, 0.03);
+    eng.f.frequency.setTargetAtTime(300 + rpm * 2600 + thr * 900, t, 0.05);
+    eng.g.gain.setTargetAtTime(racing ? 0.16 + 0.12 * thr + 0.06 * rpm : 0, t, 0.08);
+    var slip = Math.abs(P.slip), scr = racing ? clamp((slip - 0.1) * 2.2, 0, 1) * clamp(sp / 18, 0, 1) : 0; if (input.brake && sp > 25) scr = Math.max(scr, 0.25 * clamp((sp - 25) / 30, 0, 1));
+    eng.sg.gain.setTargetAtTime(scr * 0.3, t, 0.04); eng.sf.frequency.setTargetAtTime(1300 + sp * 14, t, 0.1);
+    eng.wg.gain.setTargetAtTime(racing ? clamp(sp / 80, 0, 1) * 0.1 : 0, t, 0.1); eng.wf.frequency.setTargetAtTime(500 + sp * 18, t, 0.1);
+    eng.rg.gain.setTargetAtTime(racing && P.offroad ? clamp(sp / 30, 0, 1) * 0.55 : 0, t, 0.08);
+    eng.cg.gain.setTargetAtTime(mode === 'title' ? 0.05 : (mode === 'grid' ? 0.1 : (mode === 'finish' ? 0.22 : 0.035)), t, 0.4);
+  }
+  function sfxBump(v) { noiseHit(0.22, clamp(v / 30, 0.15, 0.9), 600, 0, 'lowpass'); tone(90, 0.18, 'square', 0.25, 0, sfxG, 40); }
+
+  /* ---------------------------------------------------------------- physics */
+  var GEAR_W = 12.6;
+  function stepPlayer(dt) {
+    var p = P, racing = mode === 'race', thr = racing && input.gas ? 1 : 0, brk = (racing && input.brake) || mode === 'grid' ? 1 : 0, st = racing ? (input.right ? 1 : 0) - (input.left ? 1 : 0) : 0;
+    if (mode === 'finish') { brk = 0; thr = p.s < 30 ? 0.6 : 0; st = clamp(-trkNearest(p.x, p.z, p.idx).off * 0.05, -0.4, 0.4); }
+    if (mode === 'grid') { brk = 1; }
+    var s = p.s, acc = 0;
+    if (thr) acc += 15.5 * (1 - Math.max(s, 0) / 78) + (s < 0 ? 24 : 0);
+    else if (s > 0) acc -= 2.4 + s * 0.012;
+    var reversing = false;
+    if (brk) { if (s > 0.6) acc -= 36; else if (!thr && mode === 'race') { acc -= 8 * (s > -9 ? 1 : 0); reversing = true; } else if (s > -0.2) acc -= 40 * (s > 0 ? 1 : 0); }
+    acc -= 0.0011 * s * Math.abs(s);
+    if (p.offroad) acc -= s * 0.55 + (s > 0 ? 2 : 0);
+    p.acc += (acc - p.acc) * Math.min(1, dt * 8);
+    s += acc * dt; if (s < -9) s = -9; if (s < 0 && !brk && !thr) s *= Math.exp(-3 * dt);
+    p.brkL = (brk && s > 0.6) ? 1 : 0;
+    var rate = st === 0 ? 7 : 3.6 / (1 + Math.abs(s) / 24);
+    if (st !== 0 && Math.sign(st) !== Math.sign(p.steer) && p.steer !== 0) rate = 8;
+    p.steer += clamp(st - p.steer, -rate * dt, rate * dt);
+    var dmax = 0.5 / (1 + Math.pow(Math.abs(s) / 30, 2)), dl = p.steer * dmax, w = clamp(s / 2.8 * Math.tan(dl), -1.4, 1.4);
+    p.h += w * dt;
+    if (s > 0.4) {
+      var slip = angDiff(p.h, p.th), aLat = (brk ? 15 : 26) * (p.offroad ? 0.55 : 1), maxRot = aLat / Math.max(s, 5);
+      var rot = clamp(slip * 7, -maxRot, maxRot) * dt; p.th += rot; p.slip = angDiff(p.h, p.th);
+      s -= Math.abs(Math.sin(p.slip)) * s * 0.55 * dt;
+    } else { p.th = p.h; p.slip = 0; }
+    p.s = s;
+    p.x += Math.cos(p.th) * s * dt; p.z += Math.sin(p.th) * s * dt;
+    // track relation
+    var q = trkNearest(p.x, p.z, p.idx), prev = p.idx; p.idx = q.i; p.off = q.off; p.offroad = Math.abs(q.off) > HW + KERB - 0.2;
+    var lim = BAR - 1.5;
+    if (Math.abs(q.off) > lim) {
+      var over = Math.abs(q.off) - lim, sg = Math.sign(q.off); p.x -= TR.NX[q.i] * over * sg; p.z -= TR.NZ[q.i] * over * sg;
+      var imp = Math.abs(s) * 0.5; if (imp > 4) { sfxBump(imp * 1.2); shake = Math.max(shake, clamp(imp / 20, 0.2, 1)); }
+      var ta = Math.atan2(TR.TZ[q.i], TR.TX[q.i]); p.s *= 0.62; p.th += angDiff(ta, p.th) * 0.5; p.h += angDiff(ta, p.h) * 0.5;
+    }
+    if (prev > TR.N * 0.75 && p.idx < TR.N * 0.25) lapCross(1); else if (prev < TR.N * 0.25 && p.idx > TR.N * 0.75) lapCross(-1);
+    p.prog = p.lapC * TR.L + (p.idx + (q.along / TR.ds)) * TR.ds;
+    // gear / rpm
+    var sp = Math.max(0, s), g = Math.min(6, 1 + Math.floor(sp / GEAR_W)), fr = (sp - (g - 1) * GEAR_W) / GEAR_W;
+    p.gear = sp < 0.5 ? (s < -0.5 ? 'R' : 'N') : g; p.rpm = sp < 0.5 ? 0.18 + (thr ? 0.45 : 0) : 0.38 + 0.62 * clamp(fr, 0, 1);
+    if (typeof p.gear === 'number' && p.gear !== lastGear) { if (p.gear > lastGear && thr) { p.rpm = 0.3; noiseHit(0.1, 0.12, 2500, 0, 'bandpass'); } lastGear = p.gear; }
+    // body motion
+    var lat = p.slip * s * 0.06 + p.steer * s * 0.01; p.roll += (clamp(-lat * 0.14, -0.08, 0.08) - p.roll) * Math.min(1, dt * 6); p.pitch += (clamp(p.acc * 0.0022, -0.05, 0.04) - p.pitch) * Math.min(1, dt * 5);
+    p.spd = Math.abs(s);
+    // stuck recovery
+    if (racing && Math.abs(s) < 1.2 && (input.gas || input.brake) && Math.abs(q.off) > lim - 3) { p.stuck += dt; if (p.stuck > 2.5) { recoverPlayer(); } } else p.stuck = 0;
+  }
+  function recoverPlayer() { var q = trkPoint(P.prog >= 0 ? P.prog : TR.L + P.prog, 0); P.x = q.x; P.z = q.z; P.h = P.th = Math.atan2(q.tz, q.tx); P.s = 8; P.stuck = 0; P.steer = 0; toast('BACK ON TRACK'); }
+  function lapCross(dir) {
+    var p = P; p.lapC += dir;
+    if (dir > 0 && p.lapC >= 0 && !p.fin) {
+      if (p.lapC >= 1) { var lt = raceT - p.lapStart; p.lastLap = lt; if (!p.best || lt < p.best) { p.best = lt; toast('BEST LAP ' + fmtT(lt)); } else toast('LAP ' + fmtT(lt)); }
+      p.lapStart = raceT;
+      if (p.lapC >= LAPS) { p.fin = true; p.finT = raceT; endRace(); }
+      else if (p.lapC === LAPS - 1) setTimeout(function () { if (mode === 'race') toast('FINAL LAP'); }, 1500);
+    }
+  }
+  function fmtT(t) { if (!t) return '--'; var m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1); }
+
+  function stepAI(dt) {
+    var racing = mode === 'race' || mode === 'finish';
+    AI.forEach(function (a, ai) {
+      var pt = trkPoint(a.prog < 0 ? TR.L + a.prog : a.prog, a.off), target = racing ? pt.vp * a.skill : 0;
+      var gap = a.prog - P.prog; if (racing) { if (gap > 140) target *= 0.9; else if (gap < -140) target *= 1.07; }
+      if (a.fin) target = 38;
+      var dv = target - a.v; a.v += clamp(dv, -26 * dt, (14 - a.v * 0.08) * dt);
+      a.prog += a.v * dt;
+      // avoidance
+      var need = 0;
+      var others = AI.concat([{ prog: P.prog, off: P.off, v: P.spd }]);
+      for (var j = 0; j < others.length; j++) { var o = others[j]; if (o === a) continue; var d = o.prog - a.prog; if (d > 0 && d < 16 && Math.abs(o.off - a.off) < 3.6) need = (o.off > a.off ? -1 : 1) * 4.2; }
+      if (need) a.tgt = clamp(a.off + need, -HW + 3, HW - 3); else if (Math.random() < 0.01) a.tgt = clamp(a.tgt + (Math.random() - 0.5) * 3, -7, 7);
+      a.off += clamp(a.tgt - a.off, -3.2 * dt, 3.2 * dt);
+      updateAIpos(a);
+      if (!a.fin && a.prog >= LAPS * TR.L) { a.fin = true; a.finT = raceT; }
+      // collision with player
+      var dx = P.x - a.x, dz = P.z - a.z, d2 = Math.hypot(dx, dz), R = 2.25;
+      if (d2 < R && d2 > 0.001) { var ov = R - d2, nx = dx / d2, nz = dz / d2; P.x += nx * ov * 0.8; P.z += nz * ov * 0.8; var rel = Math.abs(P.s - a.v); if (rel > 3) { sfxBump(rel * 1.5); shake = Math.max(shake, clamp(rel / 25, 0.15, 0.7)); } if (P.s > a.v) P.s = Math.max(a.v * 0.97, P.s * 0.93); else a.v *= 0.97; }
+    });
+  }
+  function standings() {
+    var all = [{ me: true, name: 'YOU', prog: P.prog, fin: P.fin, finT: P.finT, v: P.spd }];
+    AI.forEach(function (a) { all.push({ me: false, name: a.name, prog: a.prog, fin: a.fin, finT: a.finT, v: a.v }); });
+    all.forEach(function (c) { c.est = c.fin ? c.finT : raceT + Math.max(0, LAPS * TR.L - c.prog) / Math.max(c.v, 30); });
+    return all;
+  }
+  function rankOf() {
+    var n = 1; AI.forEach(function (a) { if (a.prog > P.prog) n++; }); return n;
+  }
+
+  /* ---------------------------------------------------------------- flow */
+  function toast(t) { var e = $('toast'); e.textContent = t; e.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(function () { e.style.opacity = 0; }, 1500); }
+  function screen(id) { ['title', 'how', 'pause', 'results'].forEach(function (k) { $(k).classList.toggle('show', k === id); }); }
+  var cdStep = -1;
+  function showCount(txt, col) { var e = $('count'); e.textContent = txt; e.style.color = col || '#fff'; e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); }
+  function startRace() {
+    audioInit(); resetRace(); mode = 'grid'; modeT = 0; cdStep = -1; screen(null); setHud(true);
+    if (AC) { noiseHit(1.2, 0.3, 900, 0, 'bandpass'); }
+  }
+  function goRace() { mode = 'race'; modeT = 0; raceT = 0; showCount('GO!', '#4be38a'); tone(880, 0.5, 'square', 0.25); tone(1320, 0.5, 'square', 0.12); noiseHit(1.6, 0.25, 1200, 0, 'bandpass'); }
+  function endRace() {
+    mode = 'finish'; modeT = 0; toast('FINISHED!');
+    if (AC) { noiseHit(2.5, 0.4, 1500, 0, 'bandpass'); tone(660, 0.3, 'triangle', 0.3); tone(880, 0.5, 'triangle', 0.3, AC.currentTime + 0.18); }
+    setTimeout(showResults, 2600);
+  }
+  function showResults() {
+    if (mode !== 'finish') return;
+    var all = standings().sort(function (a, b) { return a.est - b.est; }), me = all.findIndex(function (c) { return c.me; }) + 1;
+    var ord = ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH'];
+    $('resTitle').textContent = me === 1 ? 'VICTORY!' : me <= 3 ? 'PODIUM FINISH' : 'RACE COMPLETE';
+    $('resSub').textContent = ord[me - 1] + ' place  ·  ' + fmtT(P.finT) + '  ·  best lap ' + fmtT(P.best);
+    $('resTable').innerHTML = all.map(function (c, i) { return '<tr' + (c.me ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td>' + (c.me ? 'You' : c.name) + '</td><td>' + (i === 0 ? fmtT(c.est) : '+' + (c.est - all[0].est).toFixed(1) + 's') + '</td></tr>'; }).join('');
+    screen('results'); setHud(false);
+  }
+  function showTitle() { mode = 'title'; modeT = 0; resetRace(); screen('title'); setHud(false); }
+  function setHud(on) { ['pos', 'timeBox', 'speed', 'touch'].forEach(function (k) { $(k).style.display = on ? '' : 'none'; }); $('btnView').parentNode.style.display = on ? '' : 'none'; if (!on) { $('mirror').style.display = 'none'; } }
+
+  /* ---------------------------------------------------------------- rendering */
+  var dc = $('dash'), dctx = dc.getContext('2d'), LY = {}, P16 = new Float32Array(16), V16 = new Float32Array(16), VP16 = new Float32Array(16), M16 = new Float32Array(16), A16 = new Float32Array(16), B16 = new Float32Array(16);
+  var tintDef = [1, 1, 1];
+  function layout() {
+    var r = $('stage').getBoundingClientRect(); VW = Math.max(300, r.width); VH = Math.max(200, r.height);
+    DPR = Math.min(window.devicePixelRatio || 1, 1.6); glc.width = Math.round(VW * DPR); glc.height = Math.round(VH * DPR);
+    var dd = Math.min(window.devicePixelRatio || 1, 2); dc.width = Math.round(VW * dd); dc.height = Math.round(VH * dd); LY.dd = dd;
+    LY.mw = Math.min(VW * 0.28, 250); LY.mh = LY.mw / 3.6; LY.mx = (VW - LY.mw) / 2; LY.my = Math.max(52, VH * 0.17);
+    var m = $('mirror'); m.style.left = (LY.mx - 4) + 'px'; m.style.top = (LY.my - 4) + 'px'; m.style.width = (LY.mw + 8) + 'px'; m.style.height = (LY.mh + 8) + 'px';
+  }
+  if (window.ResizeObserver) new ResizeObserver(layout).observe($('stage')); window.addEventListener('resize', layout);
+  function rotM(o, kind, a) { var c = Math.cos(a), s = Math.sin(a); o.fill(0); o[15] = 1; if (kind === 'y') { o[0] = c; o[2] = -s; o[5] = 1; o[8] = s; o[10] = c; } else if (kind === 'z') { o[0] = c; o[1] = s; o[4] = -s; o[5] = c; o[10] = 1; } else { o[0] = 1; o[5] = c; o[6] = s; o[9] = -s; o[10] = c; } return o; }
+  function carM(o, x, y, z, yaw, pitch, roll) { rotM(A16, 'y', yaw); rotM(B16, 'z', pitch); mul(M16, A16, B16); rotM(B16, 'x', roll); mul(o, M16, B16); o[12] = x; o[13] = y; o[14] = z; return o; }
+  function bindMesh(m) { gl.bindBuffer(gl.ARRAY_BUFFER, m.vb); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.ib); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 44, 0); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 44, 12); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 44, 24); gl.vertexAttribPointer(3, 2, gl.FLOAT, false, 44, 36); }
+  var IDM = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  function drawM(m, model, o) {
+    if (!m || !m.count) return; o = o || {}; bindMesh(m);
+    var tx = o.tex || m.tex; gl.bindTexture(gl.TEXTURE_2D, tx || white); gl.uniform1f(U.uUseTex, tx ? 1 : 0);
+    gl.uniformMatrix4fv(U.uModel, false, model || IDM); var t = o.tint || tintDef; gl.uniform3f(U.uTint, t[0], t[1], t[2]);
+    gl.uniform1f(U.uUnlit, o.unlit ? 1 : 0); gl.uniform1f(U.uAlpha, o.alpha == null ? 1 : o.alpha); gl.uniform1f(U.uTwo, o.two ? 1 : 0); gl.uniform1f(U.uSpec, o.spec || 0);
+    gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0);
+  }
+  function setCommon(ex, ey, ez, fn, ff) {
+    gl.uniformMatrix4fv(U.uVP, false, VP16); gl.uniform3f(U.uCam, ex, ey, ez); gl.uniform3f(U.uSun, SUN[0], SUN[1], SUN[2]); gl.uniform3f(U.uFog, FOGC[0], FOGC[1], FOGC[2]); gl.uniform1f(U.uFogNear, fn); gl.uniform1f(U.uFogFar, ff);
+  }
+  function drawCar(x, z, h, tint, roll, pitch, brk, opts) {
+    carM(M16, x, 0.09, z, -h, pitch || 0, roll || 0); var m = new Float32Array(M16);
+    if (!opts || !opts.noShadow) { trs(A16, x, 0, z, -h, 5.8, 1, 2.9); gl.depthMask(false); drawM(W3.blobq, A16, { unlit: true, alpha: 0.8, two: true }); gl.depthMask(true); }
+    if (opts && opts.hide) return;
+    drawM(CAR.body, m, { tint: tint, spec: 0.9 }); drawM(CAR.glass, m, { spec: 1.4 }); drawM(CAR.trim, m, {}); drawM(CAR.rim, m, { spec: 0.8 }); drawM(CAR.lamp, m, { unlit: true });
+    var bl = brk ? 1.7 : 0.7; drawM(CAR.tail, m, { unlit: true, tint: [bl, bl * 0.14, bl * 0.12] });
+  }
+  function sceneView(ex, ey, ez, yaw, pitch, roll, fov, asp, flip, hideCar, warm) {
+    persp(P16, fov, asp, 0.5, 4200); if (flip) P16[0] = -P16[0]; viewM(V16, ex, ey, ez, yaw, pitch, roll); mul(VP16, P16, V16);
+    gl.clearColor(FOGC[0], FOGC[1], FOGC[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    var skyT = warm ? [1.12, 0.84, 0.66] : [1, 1, 1];
+    setCommon(ex, ey, ez, 1e6, 2e6); gl.depthMask(false);
+    trs(M16, ex, 0, ez, 0, 1, 1, 1); drawM(W3.sky, M16, { unlit: true, tint: skyT, two: true });
+    var sx = ex + SUN[0] * 2300, sy = ey + (warm ? 260 : SUN[1] * 2300), sz = ez + SUN[2] * 2300, sy2 = Math.atan2(ex - sx, ez - sz);
+    trs(M16, sx, sy, sz, sy2, 1100, 1100, 1); drawM(W3.quad, M16, { unlit: true, tex: W3.tex.sun, alpha: 0.95, two: true, tint: warm ? [1, 0.7, 0.4] : [1, 1, 0.95] });
+    W3.clouds.forEach(function (c) { var cx = ex + Math.cos(c.a) * c.r, cz = ez + Math.sin(c.a) * c.r; trs(M16, cx, c.h, cz, Math.atan2(ex - cx, ez - cz), c.s, c.s * 0.34, 1); drawM(W3.quad, M16, { unlit: true, tex: W3.tex.cloud, alpha: 0.8, two: true, tint: warm ? [1.1, 0.8, 0.7] : [1, 1, 1] }); });
+    gl.depthMask(true);
+    setCommon(ex, ey, ez, 380, 2300);
+    drawM(W3.hills, null, { two: true }); drawM(W3.ground, null, { tint: warm ? [1.05, 0.9, 0.78] : [1, 1, 1] });
+    drawM(W3.gravel, null, {}); drawM(W3.road, null, {}); drawM(W3.kerb, null, {}); drawM(W3.startline, null, {});
+    drawM(W3.rail, null, { two: true, spec: 0.5 }); drawM(W3.trees, null, { two: true }); drawM(W3.palms, null, { two: true }); drawM(W3.lamps, null, {}); drawM(W3.lampHeads, null, { unlit: true });
+    drawM(W3.crowd, null, { two: true }); drawM(W3.stands, null, {}); drawM(W3.gantry, null, {}); drawM(W3.bpoles, null, {});
+    trs(M16, -0.95, 10, 0, -Math.PI / 2, 14, 3.5, 1); drawM(W3.quad, M16, { tex: W3.startBanner, two: true, unlit: true });
+    W3.bi.forEach(function (q) { trs(M16, q.x, 5.4, q.z, q.yaw, q.b.w, q.b.h, 1); drawM(W3.quad, M16, { tex: q.b.t, two: true, unlit: true }); });
+    var me = COLS[colorSel];
+    AI.forEach(function (a) { drawCar(a.x, a.z, a.h, a.col, 0, 0, false); });
+    if (P) drawCar(P.x, P.z, P.h, [me[0], me[1], me[2]], P.roll, P.pitch, P.brkL > 0, { hide: hideCar });
+  }
+  function camSetup(dt) {
+    var c = { x: 0, y: 3, z: 0, yaw: 0, pitch: 0, fov: 1.05, warm: false, hide: false, roll: 0 };
+    if (!P) return c;
+    var fx = Math.cos(P.h), fz = Math.sin(P.h), rx = -fz, rz = fx;
+    if (mode === 'title') {
+      var a = 0.9 + modeT * 0.16, r = 8.4; c.x = P.x + Math.cos(a) * r; c.z = P.z + Math.sin(a) * r * 0.9; c.y = 1.5 + Math.sin(modeT * 0.3) * 0.25; var dx = P.x - c.x, dz = P.z - c.z; c.yaw = Math.atan2(dz, dx); c.pitch = Math.atan2(0.72 - c.y, Math.hypot(dx, dz)); c.fov = 0.7; c.warm = true; return c;
+    }
+    camYaw += angDiff(P.h, camYaw) * (1 - Math.exp(-dt * (mode === 'grid' ? 20 : 5.5)));
+    var sh = shake * 0.12, jx = (Math.random() - 0.5) * sh, jy = (Math.random() - 0.5) * sh;
+    c.fov = 1.05 + clamp(P.spd / 90, 0, 1) * 0.28;
+    if (camMode === 2) { c.x = P.x + fx * 0.1 + rx * -0.36; c.z = P.z + fz * 0.1 + rz * -0.36; c.y = 1.0 + jy; c.yaw = P.h + P.steer * 0.035; c.pitch = -P.pitch * 1.2 + jx * 0.4; c.hide = true; c.roll = P.roll * 0.5 + jx * 0.2; c.fov = 1.15 + clamp(P.spd / 90, 0, 1) * 0.25; return c; }
+    if (camMode === 1) { c.x = P.x + fx * 1.55; c.z = P.z + fz * 1.55; c.y = 1.12 + jy; c.yaw = P.h + P.steer * 0.04; c.pitch = -0.04 - P.pitch; c.roll = P.roll * 0.5; return c; }
+    var dist = 7.6 + P.spd * 0.03, cfx = Math.cos(camYaw), cfz = Math.sin(camYaw), cx = P.x - cfx * dist, cz = P.z - cfz * dist, cy = 2.5 + P.spd * 0.004;
+    if (mode === 'grid' && modeT < 3.9) { var t = clamp(modeT / 3.9, 0, 1), e = t * t * (3 - 2 * t), hx = P.x + fx * 38 + rx * 20, hz = P.z + fz * 38 + rz * 20, hy = 16; cx = hx + (cx - hx) * e; cz = hz + (cz - hz) * e; cy = hy + (cy - hy) * e; }
+    c.x = cx + jx; c.z = cz; c.y = cy + jy;
+    var tx = P.x + cfx * 9, tz = P.z + cfz * 9, ddx = tx - c.x, ddz = tz - c.z; c.yaw = Math.atan2(ddz, ddx); c.pitch = Math.atan2(1.1 - c.y, Math.hypot(ddx, ddz)); c.roll = clamp(-P.steer * P.spd * 0.0004, -0.04, 0.04);
+    return c;
+  }
+  function render(dt) {
+    if (!GLOK) return;
+    var warm = mode === 'title'; FOGC[0] = warm ? 0.93 : 0.74; FOGC[1] = warm ? 0.76 : 0.86; FOGC[2] = warm ? 0.62 : 0.95;
+    var c = camSetup(dt);
+    gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, glc.width, glc.height);
+    sceneView(c.x, c.y, c.z, c.yaw, c.pitch, c.roll, c.fov, VW / VH, false, c.hide, c.warm);
+    var showM = (mode === 'race' || mode === 'grid' || mode === 'finish') && camMode >= 1 && P;
+    $('mirror').style.display = showM ? 'block' : 'none';
+    if (showM) {
+      var mx = Math.round(LY.mx * DPR), my = Math.round((VH - LY.my - LY.mh) * DPR), mw = Math.round(LY.mw * DPR), mh = Math.round(LY.mh * DPR);
+      gl.enable(gl.SCISSOR_TEST); gl.viewport(mx, my, mw, mh); gl.scissor(mx, my, mw, mh);
+      sceneView(c.x, c.y + 0.1, c.z, P.h + Math.PI, -0.02, 0, 0.62, LY.mw / LY.mh, true, true, false);
+      gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, glc.width, glc.height);
+    }
+  }
+
+  /* ---------------------------------------------------------------- cockpit overlay */
+  function drawDash() {
+    var d = LY.dd; dctx.setTransform(d, 0, 0, d, 0, 0); dctx.clearRect(0, 0, VW, VH);
+    if (camMode !== 2 || mode === 'title' || !P) return;
+    var x = dctx, W = VW, H = VH;
+    // roof + pillars
+    x.fillStyle = '#0a0b0d'; x.beginPath(); x.moveTo(0, 0); x.lineTo(W, 0); x.lineTo(W, H * 0.07); x.quadraticCurveTo(W * 0.5, H * 0.115, 0, H * 0.07); x.fill();
+    x.beginPath(); x.moveTo(0, 0); x.lineTo(W * 0.14, 0); x.lineTo(W * 0.045, H * 0.7); x.lineTo(0, H * 0.78); x.fill();
+    x.beginPath(); x.moveTo(W, 0); x.lineTo(W * 0.88, 0); x.lineTo(W * 0.975, H * 0.66); x.lineTo(W, H * 0.74); x.fill();
+    // dash top
+    var gr = x.createLinearGradient(0, H * 0.7, 0, H); gr.addColorStop(0, '#1d1f25'); gr.addColorStop(0.35, '#0e0f13'); gr.addColorStop(1, '#050507');
+    x.fillStyle = gr; x.beginPath(); x.moveTo(0, H * 0.84); x.quadraticCurveTo(W * 0.25, H * 0.74, W * 0.5, H * 0.755); x.quadraticCurveTo(W * 0.75, H * 0.74, W, H * 0.82); x.lineTo(W, H); x.lineTo(0, H); x.fill();
+    x.strokeStyle = 'rgba(255,255,255,0.16)'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(0, H * 0.84); x.quadraticCurveTo(W * 0.25, H * 0.74, W * 0.5, H * 0.755); x.quadraticCurveTo(W * 0.75, H * 0.74, W, H * 0.82); x.stroke();
+    // gauges
+    var gy = H * 0.86, gr0 = H * 0.115, cxL = W * 0.5 - gr0 * 1.35, cxR = W * 0.5 + gr0 * 1.35;
+    function gauge(cx, cy, r, val, max, label, ticks) {
+      x.fillStyle = '#07080a'; x.beginPath(); x.arc(cx, cy, r, 0, 6.283); x.fill(); x.strokeStyle = '#3a3d46'; x.lineWidth = 3; x.stroke();
+      var a0 = Math.PI * 0.8, a1 = Math.PI * 2.2;
+      for (var i = 0; i <= ticks; i++) { var a = a0 + (a1 - a0) * i / ticks, big = i % 2 === 0; x.strokeStyle = i > ticks * 0.82 ? '#ff3b2f' : '#dfe3ea'; x.lineWidth = big ? 2 : 1; x.beginPath(); x.moveTo(cx + Math.cos(a) * r * (big ? 0.8 : 0.86), cy + Math.sin(a) * r * (big ? 0.8 : 0.86)); x.lineTo(cx + Math.cos(a) * r * 0.94, cy + Math.sin(a) * r * 0.94); x.stroke(); }
+      var na = a0 + (a1 - a0) * clamp(val / max, 0, 1); x.strokeStyle = '#ff5a3c'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(na) * r * 0.82, cy + Math.sin(na) * r * 0.82); x.stroke();
+      x.fillStyle = '#ff5a3c'; x.beginPath(); x.arc(cx, cy, r * 0.07, 0, 6.283); x.fill(); x.fillStyle = '#9aa3b2'; x.font = '600 ' + Math.round(r * 0.18) + 'px Rajdhani, sans-serif'; x.textAlign = 'center'; x.fillText(label, cx, cy + r * 0.52);
+    }
+    gauge(cxL, gy, gr0, P.spd * 3.6, 360, 'KM/H', 18); gauge(cxR, gy, gr0, P.rpm * 8.5, 9, 'x1000 RPM', 9);
+    x.fillStyle = '#fff'; x.font = '700 ' + Math.round(gr0 * 0.5) + 'px "Bebas Neue", Impact, sans-serif'; x.textAlign = 'center'; x.fillText(Math.round(P.spd * 3.6), W * 0.5, gy + gr0 * 0.1); x.fillStyle = '#ffc531'; x.font = '400 ' + Math.round(gr0 * 0.42) + 'px "Bebas Neue", Impact, sans-serif'; x.fillText(P.gear, W * 0.5, gy + gr0 * 0.55);
+    // steering wheel
+    var wx = W * 0.5, wy = H * 1.02, wr = H * 0.46;
+    x.save(); x.translate(wx, wy); x.rotate(P.steer * 1.5);
+    x.strokeStyle = '#0b0b0e'; x.lineWidth = H * 0.06; x.beginPath(); x.arc(0, 0, wr, Math.PI * 1.05, Math.PI * 1.95); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,0.13)'; x.lineWidth = 2; x.beginPath(); x.arc(0, 0, wr + H * 0.022, Math.PI * 1.08, Math.PI * 1.92); x.stroke();
+    x.strokeStyle = '#ff3b2f'; x.lineWidth = 5; x.beginPath(); x.moveTo(0, -wr - H * 0.028); x.lineTo(0, -wr + H * 0.028); x.stroke();
+    x.strokeStyle = '#15161a'; x.lineWidth = H * 0.05; x.beginPath(); x.moveTo(-wr * 0.95, -wr * 0.1); x.lineTo(-wr * 0.2, -wr * 0.16); x.moveTo(wr * 0.95, -wr * 0.1); x.lineTo(wr * 0.2, -wr * 0.16); x.stroke();
+    x.fillStyle = '#17181d'; x.beginPath(); x.arc(0, -wr * 0.05, wr * 0.22, Math.PI, 0); x.fill(); x.restore();
+  }
+
+  /* ---------------------------------------------------------------- HUD + input + loop */
+  var hudAcc = 0;
+  function updateHud() {
+    if (!P) return; var rank = rankOf();
+    $('posBox').innerHTML = rank + '<small>/' + (AI.length + 1) + '</small>'; $('lapN').textContent = clamp(P.lapC + 1, 1, LAPS) + '/' + LAPS; $('bestT').textContent = fmtT(P.best);
+    $('raceT').textContent = fmtT(raceT); $('spd').firstChild.nodeValue = Math.round(P.spd * 3.6); $('gear').textContent = P.gear || 'N'; $('revFill').style.width = Math.round(clamp(P.rpm, 0, 1) * 100) + '%';
+    $('speed').style.display = camMode === 2 ? 'none' : '';
+  }
+  function setPad(id, key) {
+    var e = $(id);
+    function on(ev) { ev.preventDefault(); touchIn[key] = true; e.classList.add('on'); try { e.setPointerCapture(ev.pointerId); } catch (x) {} audioInit(); }
+    function off(ev) { touchIn[key] = false; e.classList.remove('on'); }
+    e.addEventListener('pointerdown', on); e.addEventListener('pointerup', off); e.addEventListener('pointercancel', off); e.addEventListener('lostpointercapture', off); e.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+  }
+  setPad('bL', 'left'); setPad('bR', 'right'); setPad('bGas', 'gas'); setPad('bBrk', 'brake');
+  var KMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'brake', KeyS: 'brake', Space: 'brake' };
+  window.addEventListener('keydown', function (e) {
+    if (KMAP[e.code]) { keys[KMAP[e.code]] = true; e.preventDefault(); audioInit(); }
+    if (e.code === 'KeyC' && !e.repeat) cycleCam(); if ((e.code === 'KeyP' || e.code === 'Escape') && !e.repeat) togglePause();
+    if (e.code === 'Enter' && mode === 'title') $('btnRace').click();
+  });
+  window.addEventListener('keyup', function (e) { if (KMAP[e.code]) keys[KMAP[e.code]] = false; });
+  window.addEventListener('blur', function () { keys = {}; });
+  function cycleCam() { camMode = (camMode + 1) % 3; toast(['CHASE VIEW', 'HOOD VIEW', 'COCKPIT VIEW'][camMode]); }
+  function togglePause() { if (mode !== 'race' && mode !== 'grid') return; paused = !paused; screen(paused ? 'pause' : null); if (AC) paused ? AC.suspend() : AC.resume(); }
+  $('btnView').addEventListener('click', cycleCam); $('btnPause').addEventListener('click', togglePause); $('btnSnd').addEventListener('click', function () { audioInit(); setSound(!soundOn); });
+  $('btnRace').addEventListener('click', startRace); $('btnHow').addEventListener('click', function () { audioInit(); screen('how'); }); $('howOk').addEventListener('click', function () { screen(mode === 'title' ? 'title' : null); });
+  $('pResume').addEventListener('click', togglePause); $('pQuit').addEventListener('click', function () { paused = false; if (AC) AC.resume(); showTitle(); });
+  $('rAgain').addEventListener('click', startRace); $('rMenu').addEventListener('click', showTitle);
+  document.querySelectorAll('.sw').forEach(function (b) { b.addEventListener('click', function () { colorSel = +b.dataset.c; $('carName').textContent = COLS[colorSel][3]; document.querySelectorAll('.sw').forEach(function (o) { o.classList.toggle('sel', o === b); }); audioInit(); }); });
+  document.querySelector('.sw').classList.add('sel');
+  window.addEventListener('pointerdown', function () { audioInit(); }, { passive: true });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && (mode === 'race' || mode === 'grid') && !paused) togglePause(); });
+
+  var botKeys = null;
+  function botDrive() {
+    var tp = trkPoint(P.prog + 22 + P.spd * 0.7, 0), err = angDiff(Math.atan2(tp.z - P.z, tp.x - P.x), P.h);
+    keys.left = err < -0.025; keys.right = err > 0.025; var tv = trkPoint(P.prog + 10 + P.spd * 1.2, 0).vp * 0.97; keys.gas = P.spd < tv; keys.brake = P.spd > tv * 1.08;
+  }
+  var last = 0;
+  function frame(ts) {
+    requestAnimationFrame(frame); var dt = Math.min(0.05, (ts - last) / 1000 || 0.016); last = ts;
+    if (!GLOK || !P) return;
+    if (!paused) {
+      if (window.__bot && P && mode === 'race') botDrive(); else { botKeys = null; }
+      input.left = keys.left || touchIn.left; input.right = keys.right || touchIn.right; input.gas = keys.gas || touchIn.gas; input.brake = keys.brake || touchIn.brake;
+      modeT += dt; shake = Math.max(0, shake - dt * 2.4);
+      if (mode === 'grid') { var step = Math.floor(modeT - 0.4); if (step !== cdStep && step >= 0 && step <= 3) { cdStep = step; if (step < 3) { showCount(String(3 - step)); tone(440, 0.25, 'square', 0.2); } else goRace(); } }
+      if (mode === 'race' || mode === 'finish') raceT += dt;
+      var n = Math.ceil(dt / 0.0167), h = dt / n; for (var i = 0; i < n; i++) { if (mode !== 'title') stepPlayer(h); stepAI(h); }
+      if (mode === 'finish' && modeT > 20) showResults();
+      engineUpdate(dt);
+    }
+    render(dt); drawDash(); hudAcc += dt; if (hudAcc > 0.06) { hudAcc = 0; updateHud(); }
+  }
+  window.__g = function () { return { mode: mode, P: P, AI: AI, GLOK: GLOK, rank: P && rankOf(), raceT: raceT, VW: VW, VH: VH, N: TR.N, L: TR.L }; };
+  window.__t = { start: startRace, cam: function (m) { camMode = m; }, tp: function (prog) { var q = trkPoint(prog, 0); P.x = q.x; P.z = q.z; P.h = P.th = Math.atan2(q.tz, q.tx); P.idx = q.i; P.s = 30; }, go: goRace, bot: function (v) { window.__bot = v; }, setS: function (v) { P.s = v; } };
+
+  try {
+    layout(); buildWorld(); buildCar(); setSound(true); resetRace(); showTitle(); requestAnimationFrame(frame);
+  } catch (e) { $('title').innerHTML = '<div style="padding:30px;font-size:18px">Sorry, this game needs WebGL, and your browser could not start it.</div>'; console.error(e); }
+})();
+</script>
+
+</html>
